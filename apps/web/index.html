@@ -1676,12 +1676,13 @@ select option { background: #0d2137; color: #f0f4ff; }
 
           const boardsListHtml = boards.length
             ? boards.map(b => `
-                <div class="board-row">
-                  <div>
-                    <div class="board-name">${b.name}</div>
-                    <div class="board-meta">${b.size || ''} · ${b.type || ''} · ${b.shaper || ''}</div>
-                  </div>
-                </div>`).join('')
+      <div class="board-row" id="board-row-${b.id}">
+        <div>
+          <div class="board-name">${b.name}</div>
+          <div class="board-meta">${b.size || ''} · ${b.type || ''} · ${b.shaper || ''}</div>
+        </div>
+        <button onclick="editBoard(${b.id})" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:3px 8px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer">✏️</button>
+      </div>`).join('')
             : '<div class="empty">Aucune board enregistrée.</div>';
 
           const boardsHtml = `
@@ -1732,6 +1733,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                   <div class="form-group"><label>Backend URL</label><input type="text" id="backend-url" value="${backendUrl}"></div>
                   <div class="form-group"><label>Clé API (optionnelle)</label><input type="password" id="backend-api-key" value="${backendApiKey || ''}"></div>
                   <button class="btn-primary" onclick="testBackendConnection()" style="margin-bottom:8px">Tester Backend</button>
+                  <div id="backend-test-result"></div>
                 </div>
                 <div class="card">
                   <div class="form-group"><label>Supabase URL</label><input type="text" id="supabase-url" value="${supabaseUrl}"></div>
@@ -2273,10 +2275,65 @@ select option { background: #0d2137; color: #f0f4ff; }
             }
         }
 
+        function editBoard(boardId) {
+          const board = (userData.boards || []).find(b => b.id == boardId);
+          if (!board) return;
+          const row = document.getElementById(`board-row-${boardId}`);
+          if (!row) return;
+          row.innerHTML = `
+            <div style="width:100%">
+              <div class="form-group" style="margin-bottom:6px">
+                <input type="text" id="edit-board-name-${boardId}" value="${board.name || ''}" placeholder="Nom">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+                <input type="text" id="edit-board-size-${boardId}" value="${board.size || ''}" placeholder="Taille (ex: 9'2)">
+                <select id="edit-board-type-${boardId}">
+                  <option value="">Type</option>
+                  ${['longboard','midlength','shortboard','fish','gun','funboard','sup'].map(t =>
+                    `<option value="${t}" ${board.type === t ? 'selected' : ''}>${t}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <input type="text" id="edit-board-shaper-${boardId}" value="${board.shaper || ''}" placeholder="Shaper"
+                style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#f0f4ff;padding:9px 12px;font-size:0.85rem;outline:none;margin-bottom:8px">
+              <div style="display:flex;gap:6px">
+                <button class="btn-primary" style="margin:0;padding:8px;font-size:0.82rem" onclick="saveBoard(${boardId})">Sauvegarder</button>
+                <button onclick="loadProfilTab()" style="flex:0.5;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#f0f4ff;cursor:pointer;font-size:0.82rem">Annuler</button>
+              </div>
+            </div>`;
+        }
+
+        async function saveBoard(boardId) {
+          const name   = document.getElementById(`edit-board-name-${boardId}`)?.value;
+          const size   = document.getElementById(`edit-board-size-${boardId}`)?.value;
+          const type   = document.getElementById(`edit-board-type-${boardId}`)?.value;
+          const shaper = document.getElementById(`edit-board-shaper-${boardId}`)?.value;
+          if (!name) { showMessage('error', 'Le nom est requis'); return; }
+          try {
+            if (dataManager.supabase) {
+              const { error } = await dataManager.supabase
+                .from('boards')
+                .update({ name, size, type, shaper })
+                .eq('id', boardId);
+              if (error) throw new Error(error.message);
+            } else {
+              const boards = JSON.parse(localStorage.getItem('surfai_boards') || '[]');
+              const idx = boards.findIndex(b => b.id == boardId);
+              if (idx !== -1) boards[idx] = { ...boards[idx], name, size, type, shaper };
+              localStorage.setItem('surfai_boards', JSON.stringify(boards));
+            }
+            dataManager.cache.boards = null;
+            await loadUserBoards();
+            loadProfilTab();
+          } catch (e) {
+            showMessage('error', 'Erreur sauvegarde : ' + e.message);
+          }
+        }
+
         // ========================================
         // CONFIGURATION SUPABASE
         // ========================================
-        
+
         async function connectSupabase(url, key, silent = false) {
             if (!url || !key) {
                 if (!silent) showMessage('error', 'Veuillez renseigner URL et clé Supabase');
