@@ -1020,22 +1020,16 @@ select option { background: #0d2137; color: #f0f4ff; }
             async function handleSignIn(session) {
                 if (authHandled) return;
                 authHandled = true;
-                console.log('[Auth] handleSignIn userId:', session.user.id);
                 dataManager.currentUserId = session.user.id;
                 dataManager.supabase = supabaseClient;
                 if (window.location.search.includes('code=')) {
                     window.history.replaceState({}, '', window.location.pathname);
                 }
                 hideLoginOverlay();
-                try {
-                    await checkOnboarding(session.user.id);
-                } catch(e) {
-                    console.error('[Auth] handleSignIn error:', e);
-                }
+                await checkOnboarding(session.user.id);
             }
 
             supabaseClient.auth.onAuthStateChange((event, session) => {
-                console.log('[Auth] event:', event, 'session:', !!session);
                 // IMPORTANT : ne pas faire d'await dans ce callback (deadlock SDK v2)
                 // Déférer le travail async hors du callback
                 if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
@@ -1051,12 +1045,10 @@ select option { background: #0d2137; color: #f0f4ff; }
             // Si ?code= dans l'URL, le SDK va l'échanger via onAuthStateChange
             // On attend un peu pour laisser le callback se déclencher
             if (window.location.search.includes('code=')) {
-                console.log('[Auth] Code PKCE détecté, attente échange...');
                 // Le SDK échange le code automatiquement, onAuthStateChange gèrera le SIGNED_IN
                 // Timeout de sécurité : si rien ne se passe en 5s, montrer le login
                 setTimeout(() => {
                     if (!authHandled) {
-                        console.warn('[Auth] Échange PKCE timeout — affichage login');
                         showLoginOverlay();
                     }
                 }, 5000);
@@ -1083,6 +1075,16 @@ select option { background: #0d2137; color: #f0f4ff; }
             await supabaseClient.auth.signOut();
         }
 
+        // Bypass dev : connexion directe sans magic link (localhost uniquement)
+        async function devSignIn() {
+            if (window.location.hostname !== 'localhost') return;
+            const DEV_USER_ID = '3ba8ad73-e2c6-49fe-ac88-c26b45551f4b';
+            dataManager.currentUserId = DEV_USER_ID;
+            dataManager.supabase = supabaseClient;
+            hideLoginOverlay();
+            await initApp();
+        }
+
         // --- Overlay login ---
 
         function showLoginOverlay() {
@@ -1099,6 +1101,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                         <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">
                             Recevoir un lien de connexion
                         </button>
+                        ${window.location.hostname === 'localhost' ? '<button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev (localhost)</button>' : ''}
                         <div class="auth-msg" id="auth-msg"></div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -1146,29 +1149,24 @@ select option { background: #0d2137; color: #f0f4ff; }
         // --- Onboarding ---
 
         async function checkOnboarding(userId) {
+            // Timeout de 5s pour éviter un hang si RLS bloque la requête
+            const profilePromise = supabaseClient
+                .from('profiles')
+                .select('id')
+                .eq('id', userId)
+                .maybeSingle();
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), 5000)
+            );
             try {
-                console.log('[Auth] checkOnboarding userId:', userId);
-                // Timeout de 5s pour éviter un hang infini
-                const profilePromise = supabaseClient
-                    .from('profiles')
-                    .select('id')
-                    .eq('id', userId)
-                    .maybeSingle();
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('profiles query timeout')), 5000)
-                );
-                const { data, error } = await Promise.race([profilePromise, timeoutPromise]);
-                console.log('[Auth] profile found:', !!data, 'error:', error?.message);
-
+                const { data } = await Promise.race([profilePromise, timeoutPromise]);
                 if (!data) {
                     showOnboarding(userId);
                 } else {
                     await initApp();
                 }
-            } catch (err) {
-                console.error('[Auth] checkOnboarding error:', err);
-                // Timeout ou erreur → tenter initApp directement (le profil existe peut-être mais RLS bloque)
-                console.log('[Auth] Fallback: lancement initApp malgré erreur');
+            } catch {
+                // Timeout ou erreur RLS → le profil existe probablement, lancer l'app
                 await initApp();
             }
         }
