@@ -372,6 +372,39 @@ select option { background: #0d2137; color: #f0f4ff; }
   border-color: rgba(77,255,145,0.4);
   color: #4dff91;
 }
+/* ===== AUTH OVERLAY ===== */
+#auth-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10,14,39,0.92);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+}
+#auth-overlay.hidden { display: none; }
+.auth-card {
+  background: #0d2137;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 32px 24px;
+  width: 320px;
+  text-align: center;
+}
+.auth-card .auth-logo { font-size: 40px; margin-bottom: 8px; }
+.auth-card h2 { color: #f0f4ff; font-size: 1.2rem; margin: 0 0 4px; }
+.auth-card .auth-sub { color: rgba(255,255,255,0.45); font-size: 0.8rem; margin-bottom: 24px; }
+.auth-card input[type="email"] {
+  width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
+  color: #f0f4ff; font-size: 0.95rem; margin-bottom: 12px; outline: none;
+}
+.auth-card input[type="email"]::placeholder { color: rgba(255,255,255,0.3); }
+.auth-card .auth-btn {
+  width: 100%; padding: 12px; background: #4dff91; color: #0a0e27;
+  border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+}
+.auth-card .auth-btn:disabled { opacity: 0.5; cursor: default; }
+.auth-card .auth-msg { margin-top: 12px; font-size: 0.82rem; min-height: 20px; }
+.auth-card .auth-msg.success { color: #4dff91; }
+.auth-card .auth-msg.error { color: #fc8181; }
     </style>
 </head>
 <body>
@@ -529,7 +562,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                 this.subscribers = new Map();
                 this.weatherCacheTimeout = 30 * 60 * 1000; // 30 min
                 this.staticCacheTimeout = 24 * 60 * 60 * 1000; // 24h
-                this.currentUserId = 'demo_user';
+                this.currentUserId = null;
             }
 
             // GESTION SPOTS
@@ -954,52 +987,232 @@ select option { background: #0d2137; color: #f0f4ff; }
         };
 
         document.addEventListener('DOMContentLoaded', async function() {
-            // Définir la date d'aujourd'hui par défaut
-            document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
-            
-            // Charger config sauvegardée
+            // Date par défaut pour le formulaire session
+            const dateEl = document.getElementById('session-date');
+            if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+
+            // Charger backend URL depuis localStorage
             const savedBackendUrl = localStorage.getItem('backend_url');
             const savedApiKey = localStorage.getItem('backend_api_key');
-            const savedSupabaseUrl = localStorage.getItem('supabase_url');
-            const savedSupabaseKey = localStorage.getItem('supabase_key');
-            
-            // Ignorer les URLs non-localhost (ex: ancienne URL Railway)
             if (savedBackendUrl && savedBackendUrl.includes('localhost')) {
                 backendUrl = savedBackendUrl;
-                const elBu1 = document.getElementById('backend-url'); if (elBu1) elBu1.value = savedBackendUrl;
             } else if (savedBackendUrl) {
                 localStorage.setItem('backend_url', backendUrl);
-                const elBu2 = document.getElementById('backend-url'); if (elBu2) elBu2.value = backendUrl;
             }
-            if (savedApiKey) {
-                backendApiKey = savedApiKey;
-                const elBak = document.getElementById('backend-api-key'); if (elBak) elBak.value = savedApiKey;
-            }
-            // Utiliser les valeurs sauvegardées ou les defaults
-            const supabaseUrl = savedSupabaseUrl || DEFAULT_SUPABASE_URL;
-            const supabaseKey = savedSupabaseKey || DEFAULT_SUPABASE_KEY;
-            if (!savedSupabaseUrl) localStorage.setItem('supabase_url', DEFAULT_SUPABASE_URL);
-            if (!savedSupabaseKey) localStorage.setItem('supabase_key', DEFAULT_SUPABASE_KEY);
-            const elSu = document.getElementById('supabase-url'); if (elSu) elSu.value = supabaseUrl;
-            const elSk = document.getElementById('supabase-key'); if (elSk) elSk.value = supabaseKey;
+            if (savedApiKey) backendApiKey = savedApiKey;
 
-            // Initialiser gestionnaire centralisé
+            // Créer le client Supabase
+            supabaseClient = supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY);
             dataManager = new SurfAIDataManager(backendUrl, supabaseClient);
-            console.log('Gestionnaire centralisé initialisé');
 
-            // Auto-connexion Supabase (utilise les valeurs déjà chargées, sans DOM)
-            console.log('Auto-connexion Supabase...');
-            await connectSupabase(supabaseUrl, supabaseKey, true);
-            
-            // Test auto du backend
-            await checkBackendConnection();
-            
-            // Charger données harmonisées
-            await loadHarmonizedData();
-            
-            // Charger l'onglet accueil
-            await loadAccueil();
+            // Lancer l'auth — rien ne charge avant onAuthStateChange
+            await initAuth();
         });
+
+        // ========================================
+        // AUTH
+        // ========================================
+
+        async function initAuth() {
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN' && session) {
+                    dataManager.currentUserId = session.user.id;
+                    dataManager.supabase = supabaseClient;
+                    if (window.location.search.includes('code=')) {
+                        window.history.replaceState({}, '', window.location.pathname);
+                    }
+                    hideLoginOverlay();
+                    await checkOnboarding();
+                } else if (event === 'SIGNED_OUT') {
+                    dataManager.currentUserId = null;
+                    userData = { sessions: [], spots: [], favoriteSpots: [], predictions: [], profile: {}, boards: [] };
+                    showLoginOverlay();
+                }
+            });
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                dataManager.currentUserId = session.user.id;
+                dataManager.supabase = supabaseClient;
+                await checkOnboarding();
+            } else {
+                showLoginOverlay();
+            }
+        }
+
+        async function initApp() {
+            await checkBackendConnection();
+            await loadHarmonizedData();
+            await loadSessions();
+            await loadAccueil();
+        }
+
+        async function signOut() {
+            await supabaseClient.auth.signOut();
+        }
+
+        // --- Overlay login ---
+
+        function showLoginOverlay() {
+            let overlay = document.getElementById('auth-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'auth-overlay';
+                overlay.innerHTML = `
+                    <div class="auth-card">
+                        <div class="auth-logo">🏄‍♂️</div>
+                        <h2>SurfAI</h2>
+                        <p class="auth-sub">Ton assistant surf intelligent</p>
+                        <input type="email" id="auth-email" placeholder="ton@email.com" />
+                        <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">
+                            Recevoir un lien de connexion
+                        </button>
+                        <div class="auth-msg" id="auth-msg"></div>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#auth-email').addEventListener('keydown', e => {
+                    if (e.key === 'Enter') sendMagicLink();
+                });
+            }
+            overlay.classList.remove('hidden');
+        }
+
+        function hideLoginOverlay() {
+            const overlay = document.getElementById('auth-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        async function sendMagicLink() {
+            const emailEl = document.getElementById('auth-email');
+            const btn = document.getElementById('auth-btn');
+            const msg = document.getElementById('auth-msg');
+            const email = emailEl?.value?.trim();
+            if (!email || !email.includes('@')) {
+                msg.textContent = 'Adresse email invalide';
+                msg.className = 'auth-msg error';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Envoi...';
+            msg.textContent = '';
+            const { error } = await supabaseClient.auth.signInWithOtp({
+                email,
+                options: { emailRedirectTo: window.location.origin }
+            });
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                msg.className = 'auth-msg error';
+                btn.disabled = false;
+                btn.textContent = 'Recevoir un lien de connexion';
+            } else {
+                msg.textContent = '✉️ Vérifie ta boîte mail !';
+                msg.className = 'auth-msg success';
+                btn.textContent = 'Lien envoyé';
+            }
+        }
+
+        // --- Onboarding ---
+
+        async function checkOnboarding() {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            const { data } = await supabaseClient
+                .from('profiles')
+                .select('id')
+                .eq('id', user.id)
+                .single();
+            if (!data) {
+                showOnboarding(user.id);
+            } else {
+                await initApp();
+            }
+        }
+
+        function showOnboarding(userId) {
+            // Garantir que l'overlay existe (cas retour magic link sans passage par showLoginOverlay)
+            if (!document.getElementById('auth-overlay')) showLoginOverlay();
+            const overlay = document.getElementById('auth-overlay');
+            overlay.classList.remove('hidden');
+
+            const card = overlay.querySelector('.auth-card');
+            if (!card) return;
+
+            card.innerHTML = `
+                <div class="auth-logo">🏄‍♂️</div>
+                <h2>Bienvenue !</h2>
+                <p class="auth-sub" id="onboarding-step-label">1 / 2 — Comment tu t'appelles ?</p>
+                <div id="onboarding-step-1">
+                    <input type="text" id="onboarding-pseudo" placeholder="Ton prénom ou pseudo"
+                        style="width:100%;box-sizing:border-box;padding:12px;border-radius:8px;
+                        border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);
+                        color:#f0f4ff;font-size:0.95rem;margin-bottom:12px;outline:none" />
+                    <button class="auth-btn" onclick="onboardingStep2()">Suivant →</button>
+                </div>
+                <div id="onboarding-step-2" style="display:none">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                        <button class="onboarding-level-btn" data-level="beginner" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Débutant</button>
+                        <button class="onboarding-level-btn" data-level="intermediate" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Intermédiaire</button>
+                        <button class="onboarding-level-btn" data-level="advanced" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Avancé</button>
+                        <button class="onboarding-level-btn" data-level="expert" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Expert</button>
+                    </div>
+                    <button class="auth-btn" id="onboarding-finish-btn"
+                        onclick="finishOnboarding('${userId}')" disabled>
+                        C'est parti ! →
+                    </button>
+                </div>
+                <div class="auth-msg" id="onboarding-msg"></div>`;
+        }
+
+        function onboardingStep2() {
+            const pseudo = document.getElementById('onboarding-pseudo')?.value?.trim();
+            if (!pseudo) {
+                document.getElementById('onboarding-msg').textContent = 'Entre ton prénom ou pseudo';
+                document.getElementById('onboarding-msg').className = 'auth-msg error';
+                return;
+            }
+            document.getElementById('onboarding-step-1').style.display = 'none';
+            document.getElementById('onboarding-step-2').style.display = 'block';
+            document.getElementById('onboarding-step-label').textContent = '2 / 2 — Ton niveau de surf ?';
+            document.getElementById('onboarding-msg').textContent = '';
+        }
+
+        function selectLevel(btn) {
+            document.querySelectorAll('.onboarding-level-btn').forEach(b => {
+                b.style.background = 'rgba(255,255,255,0.06)';
+                b.style.borderColor = 'rgba(255,255,255,0.15)';
+                b.style.color = '#f0f4ff';
+            });
+            btn.style.background = 'rgba(77,255,145,0.15)';
+            btn.style.borderColor = '#4dff91';
+            btn.style.color = '#4dff91';
+            document.getElementById('onboarding-finish-btn').disabled = false;
+        }
+
+        async function finishOnboarding(userId) {
+            const pseudo = document.getElementById('onboarding-pseudo')?.value?.trim();
+            const levelBtn = document.querySelector('.onboarding-level-btn[style*="4dff91"]');
+            const level = levelBtn?.dataset?.level || 'intermediate';
+            const msg = document.getElementById('onboarding-msg');
+
+            const { error } = await supabaseClient.from('profiles').insert({
+                id: userId,
+                nickname: pseudo,
+                surf_level: level,
+                min_wave_height: 0.5,
+                max_wave_height: 2.0
+            });
+
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                msg.className = 'auth-msg error';
+                return;
+            }
+            hideLoginOverlay();
+            await initApp();
+        }
 
         // ========================================
         // CHARGEMENT DONNÉES HARMONISÉES
