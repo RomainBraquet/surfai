@@ -1189,29 +1189,29 @@ select option { background: #0d2137; color: #f0f4ff; }
           const country = document.getElementById('spots-country').value;
           const regionSel = document.getElementById('spots-region');
           const citySel = document.getElementById('spots-city');
-          regionSel.innerHTML = '<option value="">Région</option>';
           citySel.innerHTML = '<option value="">Ville</option>';
           if (country) {
             const spots = await dataManager.getSpots();
-            Object.keys(spots[country] || {}).forEach(r => {
-              regionSel.innerHTML += `<option value="${r}">${r}</option>`;
-            });
+            const regionHtml = Object.keys(spots[country] || {})
+              .map(r => `<option value="${r}">${r}</option>`)
+              .join('');
+            regionSel.innerHTML = '<option value="">Région</option>' + regionHtml;
           }
-          filterSpots();
+          await filterSpots();
         }
 
         async function onSpotsRegionChange() {
           const country = document.getElementById('spots-country').value;
           const region  = document.getElementById('spots-region').value;
           const citySel = document.getElementById('spots-city');
-          citySel.innerHTML = '<option value="">Ville</option>';
           if (country && region) {
             const spots = await dataManager.getSpots();
-            Object.keys(spots[country]?.[region] || {}).forEach(c => {
-              citySel.innerHTML += `<option value="${c}">${c}</option>`;
-            });
+            const cityHtml = Object.keys(spots[country]?.[region] || {})
+              .map(c => `<option value="${c}">${c}</option>`)
+              .join('');
+            citySel.innerHTML = '<option value="">Ville</option>' + cityHtml;
           }
-          filterSpots();
+          await filterSpots();
         }
 
         async function loadFavoriteSpots() {
@@ -1312,7 +1312,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           }
         }
 
-        function filterSpots() {
+        async function filterSpots() {
           const country = document.getElementById('spots-country')?.value;
           const region  = document.getElementById('spots-region')?.value;
           const city    = document.getElementById('spots-city')?.value;
