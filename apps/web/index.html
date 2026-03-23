@@ -1504,6 +1504,7 @@ select option { background: #0d2137; color: #f0f4ff; }
         // ========================================
 
         async function loadSessionTab() {
+          showSessionView('add');
           const now = new Date();
           document.getElementById('session-date').value = now.toISOString().split('T')[0];
           document.getElementById('session-time').value = now.toTimeString().slice(0, 5);
