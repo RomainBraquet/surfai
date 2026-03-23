@@ -355,6 +355,23 @@ select option { background: #0d2137; color: #f0f4ff; }
 
 /* ---- Date/heure côte à côte ---- */
 .datetime-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.switcher-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.5);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.switcher-btn.active {
+  background: rgba(77,255,145,0.15);
+  border-color: rgba(77,255,145,0.4);
+  color: #4dff91;
+}
     </style>
 </head>
 <body>
@@ -402,55 +419,67 @@ select option { background: #0d2137; color: #f0f4ff; }
 
     <!-- ===== SESSION ===== -->
     <div id="tab-session" class="tab-panel">
-      <div style="padding-top:8px">
-        <div id="session-feedback"></div>
+      <!-- Switcher -->
+      <div style="display:flex;gap:6px;padding:12px 14px 4px">
+        <button id="btn-add-session" class="switcher-btn active" onclick="showSessionView('add')">➕ Ajouter</button>
+        <button id="btn-history" class="switcher-btn" onclick="showSessionView('history')">📋 Historique</button>
+      </div>
 
-        <div class="card">
-          <span class="section-label">📍 Spot</span>
-          <select id="session-spot" required>
-            <option value="">Sélectionnez un spot</option>
-          </select>
-        </div>
+      <!-- Vue Ajouter -->
+      <div id="session-add-view" style="padding-top:4px">
+        <div style="padding-top:8px">
+          <div id="session-feedback"></div>
 
-        <div class="card">
-          <div class="datetime-row">
-            <div class="form-group" style="margin:0">
-              <label>Date</label>
-              <input type="date" id="session-date" required>
-            </div>
-            <div class="form-group" style="margin:0">
-              <label>Heure</label>
-              <input type="time" id="session-time" required>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <span class="section-label">Note de la session</span>
-          <div class="star-selector" id="star-selector">
-            <input type="radio" name="rating" id="r5" value="5"><label for="r5">★</label>
-            <input type="radio" name="rating" id="r4" value="4"><label for="r4">★</label>
-            <input type="radio" name="rating" id="r3" value="3"><label for="r3">★</label>
-            <input type="radio" name="rating" id="r2" value="2"><label for="r2">★</label>
-            <input type="radio" name="rating" id="r1" value="1"><label for="r1">★</label>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="form-group" style="margin-bottom:10px">
-            <label>Board (optionnel)</label>
-            <select id="session-board">
-              <option value="">Aucune board sélectionnée</option>
+          <div class="card">
+            <span class="section-label">📍 Spot</span>
+            <select id="session-spot" required>
+              <option value="">Sélectionnez un spot</option>
             </select>
           </div>
-          <div class="form-group" style="margin:0">
-            <label>Notes libres</label>
-            <textarea id="session-notes" rows="3" placeholder="Comment était la session ?"></textarea>
-          </div>
-        </div>
 
-        <button class="btn-primary" onclick="submitSession()">Enregistrer la session</button>
+          <div class="card">
+            <div class="datetime-row">
+              <div class="form-group" style="margin:0">
+                <label>Date</label>
+                <input type="date" id="session-date" required>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Heure</label>
+                <input type="time" id="session-time" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="section-label">Note de la session</span>
+            <div class="star-selector" id="star-selector">
+              <input type="radio" name="rating" id="r5" value="5"><label for="r5">★</label>
+              <input type="radio" name="rating" id="r4" value="4"><label for="r4">★</label>
+              <input type="radio" name="rating" id="r3" value="3"><label for="r3">★</label>
+              <input type="radio" name="rating" id="r2" value="2"><label for="r2">★</label>
+              <input type="radio" name="rating" id="r1" value="1"><label for="r1">★</label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="form-group" style="margin-bottom:10px">
+              <label>Board (optionnel)</label>
+              <select id="session-board">
+                <option value="">Aucune board sélectionnée</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>Notes libres</label>
+              <textarea id="session-notes" rows="3" placeholder="Comment était la session ?"></textarea>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="submitSession()">Enregistrer la session</button>
+        </div>
       </div>
+
+      <!-- Vue Historique -->
+      <div id="session-history-view" style="display:none;padding:0 14px"></div>
     </div>
 
     <!-- ===== PROFIL ===== -->
@@ -2526,6 +2555,42 @@ select option { background: #0d2137; color: #f0f4ff; }
         // ========================================
         // FONCTIONS UTILITAIRES ET NAVIGATION
         // ========================================
+
+        function showSessionView(view) {
+          document.getElementById('session-add-view').style.display = view === 'add' ? '' : 'none';
+          document.getElementById('session-history-view').style.display = view === 'history' ? '' : 'none';
+          document.getElementById('btn-add-session').classList.toggle('active', view === 'add');
+          document.getElementById('btn-history').classList.toggle('active', view === 'history');
+          if (view === 'history') renderSessionHistory();
+        }
+
+        function renderSessionHistory() {
+          const container = document.getElementById('session-history-view');
+          if (!container) return;
+          const sessions = userData.sessions || [];
+          if (!sessions.length) {
+            container.innerHTML = '<div class="empty" style="padding-top:24px">Aucune session enregistrée.</div>';
+            return;
+          }
+          container.innerHTML = `
+            <div class="card">
+              <span class="section-label">📋 ${sessions.length} session${sessions.length > 1 ? 's' : ''}</span>
+              ${sessions.map(s => {
+                const date = new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+                const spot = s.spots?.name || s.spot_id || '?';
+                const stars = '★'.repeat(Math.min(s.rating || 0, 5));
+                const wh = s.meteo?.waveHeight;
+                const meteo = wh != null ? ` · 🌊 ${Number(wh).toFixed(1)}m` : '';
+                return `<div class="session-compact">
+                  <div>
+                    <div style="font-size:0.82rem;color:#f0f4ff">${date} · ${spot}</div>
+                    <div style="font-size:0.72rem;color:rgba(255,255,255,0.45)">${meteo}</div>
+                  </div>
+                  <span style="color:#4dff91;font-size:0.78rem">${stars}</span>
+                </div>`;
+              }).join('')}
+            </div>`;
+        }
 
         function showTab(tabName, btn) {
           document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
