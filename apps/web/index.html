@@ -698,9 +698,9 @@ select option { background: #0d2137; color: #f0f4ff; }
                 if (this.supabase) {
                     try {
                         const { data: profile, error } = await this.supabase
-                            .from('user_profiles')
+                            .from('profiles')
                             .select('*')
-                            .eq('user_id', userId)
+                            .eq('id', userId)
                             .single();
 
                         if (error && error.code !== 'PGRST116') throw error;
@@ -1297,7 +1297,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           container.innerHTML = heroHtml + windowsHtml + quickHtml;
 
           loadGeoWeather();
-          if (userId && userId !== 'demo_user') {
+          if (userId && supabaseClient) {
             loadAccueilWindows(userId);
           } else {
             document.getElementById('accueil-windows').innerHTML = '<div class="empty">Connectez-vous pour voir vos créneaux personnalisés.</div>';
@@ -1462,7 +1462,7 @@ select option { background: #0d2137; color: #f0f4ff; }
   const container = document.getElementById('fav-spots-list');
   if (!container) return;
   const userId = dataManager.currentUserId;
-  if (!userId || userId === 'demo_user' || !dataManager.supabase) {
+  if (!userId || !supabaseClient) {
     container.innerHTML = '<div class="empty">Connectez-vous pour voir vos favoris.</div>';
     return;
   }
@@ -1510,7 +1510,7 @@ select option { background: #0d2137; color: #f0f4ff; }
 }
 
         async function prefetchSpotScores(userId) {
-          if (!userId || userId === 'demo_user') return;
+          if (!userId) return;
           try {
             const res = await fetch(`${backendUrl}/api/v1/predictions/best-windows?userId=${userId}&days=2`);
             const data = await res.json();
@@ -1591,7 +1591,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           try {
             // Prévisions 5 jours
             let windowsHtml = '<div class="empty">Prévisions indisponibles.</div>';
-            if (userId && userId !== 'demo_user') {
+            if (userId && supabaseClient) {
               const res = await fetch(`${backendUrl}/api/v1/predictions/spot/${spotId}?userId=${userId}&days=5`);
               const data = await res.json();
               if (data.success && data.windows?.length) {
@@ -1696,7 +1696,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           btn.textContent = isNowFav ? '⭐ Favori' : '☆ Favori';
           if (!dataManager.supabase) return;
           const userId = dataManager.currentUserId;
-          if (!userId || userId === 'demo_user') return;
+          if (!userId) return;
           try {
             if (isNowFav) {
               await dataManager.supabase
@@ -1739,7 +1739,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           try {
             const userId = dataManager.currentUserId;
             let favSpots = [];
-            if (userId && userId !== 'demo_user') {
+            if (userId && supabaseClient) {
               const { data: favRows } = await dataManager.supabase
                 .from('user_favorite_spots')
                 .select('spot_id')
@@ -1938,9 +1938,6 @@ select option { background: #0d2137; color: #f0f4ff; }
               </details>
             </div>`;
 
-          const supabaseUrl = document.getElementById('supabase-url') ? document.getElementById('supabase-url').value : '';
-          const supabaseKey = document.getElementById('supabase-key') ? document.getElementById('supabase-key').value : '';
-
           const configHtml = `
             <div style="margin-top:8px;padding:0 4px">
               <button class="config-toggle" onclick="toggleConfig(this)">
@@ -1953,14 +1950,8 @@ select option { background: #0d2137; color: #f0f4ff; }
                   <button class="btn-primary" onclick="testBackendConnection()" style="margin-bottom:8px">Tester Backend</button>
                   <div id="backend-test-result"></div>
                 </div>
-                <div class="card">
-                  <div class="form-group"><label>Supabase URL</label><input type="text" id="supabase-url" value="${supabaseUrl}"></div>
-                  <div class="form-group"><label>Supabase Anon Key</label><input type="password" id="supabase-key" value="${supabaseKey}"></div>
-                  <button class="btn-primary" onclick="testSupabaseConnection()">Tester Supabase</button>
-                </div>
                 <div id="app-status" style="font-size:0.75rem;color:#888;padding:8px 0">
                   <div>Backend: ${backendUrl}</div>
-                  <div>Supabase: ${supabaseClient ? '🟢 connecté' : '🔴 non configuré'}</div>
                   <div>IA: ${backendUrl ? '🟢 actif' : '🔴 inactif'}</div>
                 </div>
               </div>
@@ -2118,44 +2109,6 @@ select option { background: #0d2137; color: #f0f4ff; }
         }
 
         // ========================================
-        // CONFIGURATION SUPABASE
-        // ========================================
-
-        async function connectSupabase(url, key, silent = false) {
-            if (!url || !key) {
-                if (!silent) showMessage('error', 'Veuillez renseigner URL et clé Supabase');
-                return false;
-            }
-            try {
-                supabaseClient = supabase.createClient(url, key);
-                const { data, error } = await supabaseClient
-                    .from('spots')
-                    .select('count')
-                    .limit(1);
-                if (error) throw new Error(`Erreur Supabase: ${error.message}`);
-                dataManager.supabase = supabaseClient;
-                localStorage.setItem('supabase_url', url);
-                localStorage.setItem('supabase_key', key);
-                if (!silent) showMessage('success', `✅ Supabase connecté ! Base de données opérationnelle.`);
-                await loadHarmonizedData();
-                await loadSessions();
-                updateAppStatus();
-                return true;
-            } catch (error) {
-                console.error('Erreur Supabase:', error);
-                if (!silent) showMessage('error', `❌ ${error.message}`);
-                return false;
-            }
-        }
-
-        async function testSupabaseConnection() {
-            const urlEl = document.getElementById('supabase-url');
-            const keyEl = document.getElementById('supabase-key');
-            if (!urlEl || !keyEl) return;
-            await connectSupabase(urlEl.value, keyEl.value, false);
-        }
-
-        // ========================================
         // FONCTIONS BACKEND (INCHANGÉES)
         // ========================================
 
@@ -2302,16 +2255,12 @@ select option { background: #0d2137; color: #f0f4ff; }
 
         async function loadSessions() {
             try {
-                // Toujours via le backend (service key, contourne RLS)
-                const res = await fetch(`${backendUrl}/api/v1/sessions/list`);
+                const userId = dataManager.currentUserId;
+                if (!userId) return;
+                const res = await fetch(`${backendUrl}/api/v1/sessions/list?userId=${userId}`);
                 const data = await res.json();
                 const sessions = data.sessions || [];
-
-                // Mémoriser les sessions et le userId pour les requêtes IA
                 userData.sessions = sessions;
-                if (sessions.length > 0 && sessions[0].user_id) {
-                    dataManager.currentUserId = sessions[0].user_id;
-                }
 
                 // Rendu legacy (sessions-list n'existe plus dans la nouvelle UI)
                 const sessionsList = document.getElementById('sessions-list');
@@ -2427,7 +2376,6 @@ select option { background: #0d2137; color: #f0f4ff; }
             statusDiv.innerHTML = `
                 <p>🟢 Backend: Connecté et fonctionnel</p>
                 <p>🟢 IA Engine: v2.0 Opérationnel</p>
-                <p>${supabaseClient ? '🟢' : '🔴'} Supabase: ${supabaseClient ? 'Connecté' : 'Non configuré'}</p>
                 <p>🟢 Données: Harmonisées et cohérentes</p>
             `;
         }
