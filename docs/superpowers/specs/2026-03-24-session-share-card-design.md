@@ -57,7 +57,16 @@
 - **Conditions** : 32px, bold, #4dff91 (vert SurfAI)
 - **Note + pseudo** : 24px, regular, #f0f4ff
 - **Date** : 22px, regular, rgba(255,255,255,0.5)
-- **Logo** : emoji 🏄‍♂️ + texte "SurfAI" en 20px, #00cfff, centré en haut de la zone données
+- **Logo** : texte "SurfAI" en 20px bold, #00cfff, centré en haut de la zone données. Pas d'emoji (les emojis ne rendent pas bien sur canvas).
+
+**Important — pas d'emojis sur le canvas :**
+Les emojis (`fillText`) s'affichent en noir/blanc ou en carrés vides sur beaucoup de navigateurs. Toutes les icônes sont remplacées par du texte :
+- Vagues : pas d'icône, juste "1.5m"
+- Vent : pas d'icône, juste "8 km/h SE"
+- Période : juste "12s"
+- Étoiles : caractères Unicode "★" (U+2605) qui rendent correctement en fillText
+- Logo : texte "SurfAI" sans emoji
+- Séparateurs : point médian " · "
 
 **Couleurs charte :**
 - Fond gradient : #0a0e27 (dark navy)
@@ -129,10 +138,24 @@ Toutes disponibles après la sauvegarde de la session :
 | Ville du spot | `session.spots.city` |
 | Date | `session.date` |
 | Note (étoiles) | `session.rating` |
-| Pseudo | `userData.profile.nickname` ou `dataManager.currentUserId` |
+| Pseudo | `userData.profile.nickname` — si vide ou absent, ne pas afficher la ligne pseudo |
 | Conditions météo | `session.meteo` (waveHeight, windSpeed, windDirection, wavePeriod) |
 
-**Si les conditions météo ne sont pas disponibles** (session sans météo auto-renseignée) : ne pas afficher la ligne conditions, le card reste clean.
+**Données manquantes — comportement :**
+- Pas de météo → ne pas afficher la ligne conditions
+- Pas de pseudo/nickname → ne pas afficher la ligne pseudo
+- Pas de rating → ne pas afficher les étoiles
+- Le card reste clean avec seulement les données disponibles
+
+**IMPORTANT — capturer les données AVANT le form reset :**
+Le formulaire d'ajout de session est reset immédiatement après sauvegarde. Les données du spot (nom, ville) doivent être capturées AVANT le reset :
+```javascript
+// Capturer avant reset
+const spotSelect = document.getElementById('session-spot');
+const spotName = spotSelect.options[spotSelect.selectedIndex]?.text || '';
+// ... puis reset le form
+```
+Alternativement, enrichir la réponse backend pour inclure le spot name/city dans le résultat de la sauvegarde.
 
 ---
 
@@ -154,16 +177,19 @@ canvas.toBlob(blob => {
 ```javascript
 canvas.toBlob(async blob => {
     const file = new File([blob], `surfai-${spotName}.png`, { type: 'image/png' });
-    if (navigator.canShare?.({ files: [file] })) {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
             files: [file],
             title: `Session surf à ${spotName}`,
             text: `🏄‍♂️ Session à ${spotName} — ${conditions}`
         });
     } else {
-        // Fallback : télécharger
-        downloadCard(blob);
+        // Fallback : télécharger (try/catch car canShare peut throw sur certains navigateurs)
+        downloadCard(canvas);
     }
+} catch (e) {
+    downloadCard(canvas);
+}
 }, 'image/png');
 ```
 
