@@ -417,6 +417,8 @@ select option { background: #0d2137; color: #f0f4ff; }
 .active-filter { background: rgba(77,255,145,0.1); border: 1px solid rgba(77,255,145,0.3); border-radius: 12px; padding: 2px 8px; font-size: 0.65rem; color: #4dff91; cursor: pointer; }
 
 .zone-chips { display: flex; gap: 6px; flex-wrap: nowrap; }
+#surf-zone-chips, #city-chips { background: #0a0e27; position: relative; z-index: 2; }
+#spots-list { position: relative; z-index: 1; }
 .zone-chip { border-radius: 16px; padding: 4px 10px; font-size: 0.65rem; white-space: nowrap; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); transition: all 0.15s; }
 .zone-chip.active { background: rgba(0,207,255,0.12); border-color: rgba(0,207,255,0.4); color: #00cfff; font-weight: 600; }
 
@@ -463,8 +465,8 @@ select option { background: #0d2137; color: #f0f4ff; }
         <div id="filter-panel" class="filter-panel">
             <select id="spots-country" onchange="onSpotsCountryChange()"><option value="">Pays</option></select>
         </div>
-        <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:8px;padding-bottom:2px"></div>
-        <div id="city-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:2px"></div>
+        <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:8px;padding-bottom:4px"></div>
+        <div id="city-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:4px"></div>
         <div id="spots-list"></div>
         <button id="spots-load-more" class="spots-load-more" onclick="loadMoreSpots()">Voir plus</button>
       </div>
