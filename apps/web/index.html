@@ -1160,9 +1160,8 @@ select option { background: #0d2137; color: #f0f4ff; }
             await supabaseClient.auth.signOut();
         }
 
-        // Bypass dev : connexion directe sans magic link (localhost uniquement)
+        // Bypass dev : connexion directe sans magic link
         async function devSignIn() {
-            if (window.location.hostname !== 'localhost') return;
             const DEV_USER_ID = '3ba8ad73-e2c6-49fe-ac88-c26b45551f4b';
             dataManager.currentUserId = DEV_USER_ID;
             dataManager.supabase = supabaseClient;
@@ -1186,7 +1185,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                         <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">
                             Recevoir un lien de connexion
                         </button>
-                        ${window.location.hostname === 'localhost' ? '<button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev (localhost)</button>' : ''}
+                        <button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev</button>
                         <div class="auth-msg" id="auth-msg"></div>
                     </div>`;
                 document.body.appendChild(overlay);
