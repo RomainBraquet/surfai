@@ -267,7 +267,7 @@ async function importToSupabase(spots) {
             );
         }
 
-        // Build data object
+        // Build data object — use empty arrays instead of null for array columns
         const data = {
             name: spot.name,
             lat: spot.lat,
@@ -276,9 +276,8 @@ async function importToSupabase(spots) {
             region: spot.region,
             city: spot.city,
             surfline_id: spot.surfline_id,
+            difficulty: spot.difficulty?.length ? spot.difficulty : [],
         };
-
-        if (spot.difficulty?.length) data.difficulty = spot.difficulty;
 
         // Only set ideal_wind if not already set manually
         if (spot._ideal_wind_surfline?.length) {
