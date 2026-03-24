@@ -232,17 +232,10 @@ async function importToSupabase(spots) {
         const spot = spots[i];
         const progress = `[${i + 1}/${spots.length}]`;
 
-        // Find existing match
+        // Find existing match — uniquement par surfline_id (pas par nom, trop de faux positifs)
         let match = null;
         if (spot.surfline_id) {
             match = existing.find(e => e.surfline_id === spot.surfline_id);
-        }
-        if (!match) {
-            match = existing.find(e =>
-                e.lat && e.lng &&
-                namesMatch(e.name, spot.name) &&
-                haversineDistance(e.lat, e.lng, spot.lat, spot.lng) < 500
-            );
         }
 
         // Build data object — use empty arrays instead of null for array columns
