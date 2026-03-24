@@ -416,6 +416,10 @@ select option { background: #0d2137; color: #f0f4ff; }
 .active-filters { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
 .active-filter { background: rgba(77,255,145,0.1); border: 1px solid rgba(77,255,145,0.3); border-radius: 12px; padding: 2px 8px; font-size: 0.65rem; color: #4dff91; cursor: pointer; }
 
+.zone-chips { display: flex; gap: 6px; flex-wrap: nowrap; }
+.zone-chip { border-radius: 16px; padding: 4px 10px; font-size: 0.65rem; white-space: nowrap; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); transition: all 0.15s; }
+.zone-chip.active { background: rgba(0,207,255,0.12); border-color: rgba(0,207,255,0.4); color: #00cfff; font-weight: 600; }
+
 .spot-row { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .spot-row:active { background: rgba(255,255,255,0.08); }
 .spot-row-info { flex: 1; min-width: 0; }
@@ -458,8 +462,8 @@ select option { background: #0d2137; color: #f0f4ff; }
         <div id="active-filters" class="active-filters"></div>
         <div id="filter-panel" class="filter-panel">
             <select id="spots-country" onchange="onSpotsCountryChange()"><option value="">Pays</option></select>
-            <select id="spots-region" onchange="onSpotsRegionChange()"><option value="">Région</option></select>
         </div>
+        <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:2px"></div>
         <div id="spots-list"></div>
         <button id="spots-load-more" class="spots-load-more" onclick="loadMoreSpots()">Voir plus</button>
       </div>
@@ -1520,12 +1524,12 @@ select option { background: #0d2137; color: #f0f4ff; }
 
             let query = supabaseClient
                 .from('spots')
-                .select('id, name, city, region, country, lat, lng, wave_type, difficulty')
+                .select('id, name, city, region, country, lat, lng, wave_type, difficulty, surf_zone')
                 .range(_spotsPage * SPOTS_PAGE_SIZE, (_spotsPage + 1) * SPOTS_PAGE_SIZE - 1)
                 .order('name');
 
             if (_spotsFilters.country) query = query.eq('country', _spotsFilters.country);
-            if (_spotsFilters.region) query = query.eq('region', _spotsFilters.region);
+            if (_spotsFilters.surf_zone) query = query.eq('surf_zone', _spotsFilters.surf_zone);
             if (_spotsFilters.search && _spotsFilters.search.length >= 2) {
                 const s = _spotsFilters.search.replace(/[.,()]/g, '');
                 query = query.or(`name.ilike.%${s}%,city.ilike.%${s}%,region.ilike.%${s}%,country.ilike.%${s}%`);
@@ -1557,7 +1561,7 @@ select option { background: #0d2137; color: #f0f4ff; }
             } else {
                 list.innerHTML = sorted.map(s => {
                     const waveType = s.wave_type ? s.wave_type.replace(/_/g, ' ') : '';
-                    const loc = [s.city, s.country].filter(Boolean).join(' · ');
+                    const loc = [s.city, s.surf_zone || s.region, s.country].filter(Boolean).join(' · ');
                     const meta = [loc, waveType].filter(Boolean).join(' · ');
                     return `<div class="spot-row" onclick="showSpotDetail('${s.id}')">
                         <div class="spot-row-info">
@@ -1632,20 +1636,29 @@ select option { background: #0d2137; color: #f0f4ff; }
 
         async function onSpotsCountryChange() {
             const country = document.getElementById('spots-country')?.value || '';
-            const regionSelect = document.getElementById('spots-region');
             _spotsFilters.country = country || undefined;
-            _spotsFilters.region = undefined;
+            _spotsFilters.surf_zone = undefined;
 
-            if (country && regionSelect) {
+            const zoneContainer = document.getElementById('surf-zone-chips');
+            if (country && zoneContainer) {
                 const { data } = await supabaseClient
                     .from('spots')
-                    .select('region')
+                    .select('surf_zone')
                     .eq('country', country)
-                    .not('region', 'is', null)
-                    .order('region');
-                const regions = [...new Set((data || []).map(s => s.region))];
-                regionSelect.innerHTML = '<option value="">Toutes les régions</option>' +
-                    regions.map(r => `<option value="${r}">${r}</option>`).join('');
+                    .not('surf_zone', 'is', null);
+                const zones = [...new Set((data || []).map(s => s.surf_zone))].sort();
+                if (zones.length > 0) {
+                    zoneContainer.style.display = 'block';
+                    zoneContainer.innerHTML = `<div class="zone-chips">${zones.map(z =>
+                        `<div class="zone-chip" onclick="selectSurfZone(this, '${z.replace(/'/g, "\\'")}')">${z}</div>`
+                    ).join('')}</div>`;
+                } else {
+                    zoneContainer.style.display = 'none';
+                    zoneContainer.innerHTML = '';
+                }
+            } else if (zoneContainer) {
+                zoneContainer.style.display = 'none';
+                zoneContainer.innerHTML = '';
             }
 
             renderActiveFilters();
@@ -1653,8 +1666,15 @@ select option { background: #0d2137; color: #f0f4ff; }
             loadAndRenderSpots();
         }
 
-        function onSpotsRegionChange() {
-            _spotsFilters.region = document.getElementById('spots-region')?.value || undefined;
+        function selectSurfZone(el, zone) {
+            const isActive = el.classList.contains('active');
+            document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('active'));
+            if (isActive) {
+                _spotsFilters.surf_zone = undefined;
+            } else {
+                el.classList.add('active');
+                _spotsFilters.surf_zone = zone;
+            }
             renderActiveFilters();
             _spotsPage = 0; _spotsLoaded = [];
             loadAndRenderSpots();
@@ -1665,14 +1685,21 @@ select option { background: #0d2137; color: #f0f4ff; }
             if (!el) return;
             const chips = [];
             if (_spotsFilters.country) chips.push(`<span class="active-filter" onclick="clearFilter('country')">✕ ${_spotsFilters.country}</span>`);
-            if (_spotsFilters.region) chips.push(`<span class="active-filter" onclick="clearFilter('region')">✕ ${_spotsFilters.region}</span>`);
+            if (_spotsFilters.surf_zone) chips.push(`<span class="active-filter" onclick="clearFilter('surf_zone')">✕ ${_spotsFilters.surf_zone}</span>`);
             el.innerHTML = chips.join('');
         }
 
         function clearFilter(key) {
             delete _spotsFilters[key];
-            if (key === 'country') { delete _spotsFilters.region; document.getElementById('spots-country').value = ''; }
-            if (key === 'region') document.getElementById('spots-region').value = '';
+            if (key === 'country') {
+                delete _spotsFilters.surf_zone;
+                document.getElementById('spots-country').value = '';
+                const zc = document.getElementById('surf-zone-chips');
+                if (zc) { zc.style.display = 'none'; zc.innerHTML = ''; }
+            }
+            if (key === 'surf_zone') {
+                document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('active'));
+            }
             renderActiveFilters();
             _spotsPage = 0; _spotsLoaded = [];
             loadAndRenderSpots();
