@@ -1,0 +1,2987 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0e27">
+    <link rel="manifest" href="manifest.json">
+    <title>SurfAI</title>
+    <style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0a0e27;
+  color: #f0f4ff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ---- Navigation bas ---- */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  height: 60px;
+  display: flex;
+  background: #0d2137;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  z-index: 100;
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  padding: 6px 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-tab.active {
+  background: #4dff91;
+  color: #0a0e27;
+  font-weight: 700;
+}
+
+.nav-icon { font-size: 1.3rem; line-height: 1; }
+.nav-label { font-size: 0.62rem; letter-spacing: 0.3px; }
+
+/* ---- Panels ---- */
+.tab-content { padding-bottom: 68px; }
+
+.tab-panel { display: none; padding: 16px 14px 0; }
+.tab-panel.active { display: block; }
+
+/* ---- Cards ---- */
+.card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+/* ---- Section labels ---- */
+.section-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ---- Hero profil ---- */
+.hero {
+  background: linear-gradient(135deg, #0a0e27, #0d2137);
+  border-radius: 16px;
+  padding: 18px 14px 14px;
+  margin-bottom: 12px;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #4dff91;
+  color: #0a0e27;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.hero-name { font-size: 1rem; font-weight: 700; color: #f0f4ff; }
+.hero-sub  { font-size: 0.75rem; color: rgba(255,255,255,0.55); margin-top: 2px; }
+
+/* ---- Grille météo 4 metrics ---- */
+.meteo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  text-align: center;
+}
+
+.meteo-val  { color: #4dff91; font-weight: 700; font-size: 0.95rem; }
+.meteo-lbl  { font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.meteo-loc  { font-size: 0.72rem; color: rgba(255,255,255,0.4); margin-top: 10px; }
+
+/* ---- Créneaux IA ---- */
+.window-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.window-row:last-child { border-bottom: none; }
+
+.score-badge {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.score-green  { background: rgba(77,255,145,0.15); color: #4dff91; }
+.score-blue   { background: rgba(0,207,255,0.15);  color: #00cfff; }
+.score-orange { background: rgba(237,137,54,0.15); color: #ed8936; }
+
+.window-info { flex: 1; min-width: 0; }
+.window-title { font-size: 0.82rem; font-weight: 600; color: #f0f4ff; }
+.window-meta  { font-size: 0.73rem; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.window-narrative { font-size: 0.72rem; font-style: italic; color: #888; margin-top: 3px; }
+
+/* ---- Boutons rapides ---- */
+.quick-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.btn-quick {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #f0f4ff;
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.btn-quick:active { background: rgba(77,255,145,0.15); }
+
+/* ---- Spots (legacy, kept for compatibility) ---- */
+.spot-name { font-size: 0.85rem; font-weight: 600; color: #f0f4ff; }
+.spot-city { font-size: 0.73rem; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.spot-score { font-size: 0.78rem; font-weight: 700; }
+
+/* Fiche spot (push navigation) */
+.spot-detail { display: none; }
+.spot-detail.active { display: block; }
+.spot-list-view { }
+.spot-list-view.hidden { display: none; }
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #4dff91;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0 0 12px;
+  font-weight: 600;
+}
+
+.fav-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 20px;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.fav-btn.active { border-color: #4dff91; color: #4dff91; }
+
+/* ---- Session form ---- */
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 0.72rem; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+select, input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #f0f4ff;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+select:focus, input:focus, textarea:focus {
+  border-color: rgba(77,255,145,0.5);
+}
+
+select option { background: #0d2137; color: #f0f4ff; }
+
+/* Sélecteur étoiles 1-5 */
+.star-selector { display: flex; gap: 6px; margin-top: 4px; direction: rtl; }
+.star-selector input[type="radio"] { display: none; }
+.star-selector label {
+  font-size: 1.6rem;
+  cursor: pointer;
+  color: rgba(255,255,255,0.2);
+  transition: color 0.1s;
+  direction: ltr;
+}
+.star-selector input:checked + label,
+.star-selector input:checked + label ~ label { color: #4dff91; }
+
+/* ---- Bouton principal ---- */
+.btn-primary {
+  width: 100%;
+  background: #4dff91;
+  color: #0a0e27;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.btn-primary:active { opacity: 0.85; }
+
+/* ---- Profil ---- */
+.profil-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: #4dff91; color: #0a0e27;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 700; margin: 0 auto 12px;
+}
+
+.board-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.board-row:last-child { border-bottom: none; }
+.board-name { font-size: 0.85rem; font-weight: 600; }
+.board-meta { font-size: 0.72rem; color: rgba(255,255,255,0.45); }
+
+.session-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.8rem;
+}
+.session-compact:last-child { border-bottom: none; }
+
+/* Config collapsible */
+.config-toggle {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 8px 0;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.config-body { display: none; padding-top: 12px; }
+.config-body.open { display: block; }
+
+/* ---- Feedback messages ---- */
+.msg-success {
+  background: rgba(77,255,145,0.12);
+  border: 1px solid rgba(77,255,145,0.3);
+  border-radius: 8px;
+  color: #4dff91;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+}
+.msg-error {
+  background: rgba(237,100,100,0.12);
+  border: 1px solid rgba(237,100,100,0.3);
+  border-radius: 8px;
+  color: #fc8181;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+}
+
+/* ---- Loading / empty states ---- */
+.loading { color: rgba(255,255,255,0.4); font-size: 0.82rem; padding: 16px 0; text-align: center; }
+.empty   { color: rgba(255,255,255,0.35); font-size: 0.8rem; text-align: center; padding: 20px 0; }
+
+/* ---- Filtres spots ---- */
+.filter-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.filter-row select { font-size: 0.75rem; padding: 7px 8px; }
+
+/* ---- Date/heure côte à côte ---- */
+.datetime-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.switcher-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.5);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.switcher-btn.active {
+  background: rgba(77,255,145,0.15);
+  border-color: rgba(77,255,145,0.4);
+  color: #4dff91;
+}
+/* ===== AUTH OVERLAY ===== */
+#auth-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10,14,39,0.92);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+}
+#auth-overlay.hidden { display: none; }
+.auth-card {
+  background: #0d2137;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 32px 24px;
+  width: 320px;
+  text-align: center;
+}
+.auth-card .auth-logo { font-size: 40px; margin-bottom: 8px; }
+.auth-card h2 { color: #f0f4ff; font-size: 1.2rem; margin: 0 0 4px; }
+.auth-card .auth-sub { color: rgba(255,255,255,0.45); font-size: 0.8rem; margin-bottom: 24px; }
+.auth-card input[type="email"] {
+  width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
+  color: #f0f4ff; font-size: 0.95rem; margin-bottom: 12px; outline: none;
+}
+.auth-card input[type="email"]::placeholder { color: rgba(255,255,255,0.3); }
+.auth-card .auth-btn {
+  width: 100%; padding: 12px; background: #4dff91; color: #0a0e27;
+  border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+}
+.auth-card .auth-btn:disabled { opacity: 0.5; cursor: default; }
+.auth-card .auth-msg { margin-top: 12px; font-size: 0.82rem; min-height: 20px; }
+.auth-card .auth-msg.success { color: #4dff91; }
+.auth-card .auth-msg.error { color: #fc8181; }
+
+/* ===== SPOTS REDESIGN ===== */
+.fav-strip { padding: 0 4px; margin-bottom: 12px; }
+.fav-strip-label { color: rgba(255,255,255,0.4); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.fav-strip-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.fav-strip-scroll::-webkit-scrollbar { display: none; }
+.fav-card { min-width: 100px; border-radius: 10px; padding: 8px; text-align: center; cursor: pointer; flex-shrink: 0; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); transition: border-color 0.2s; }
+.fav-score { border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; margin-bottom: 4px; color: #0a0e27; }
+.fav-name { color: #f0f4ff; font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+.fav-city { color: rgba(255,255,255,0.35); font-size: 0.6rem; }
+
+.spots-search { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #f0f4ff; font-size: 0.9rem; outline: none; margin-bottom: 8px; }
+.spots-search::placeholder { color: rgba(255,255,255,0.3); }
+.sort-chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.sort-chip { border-radius: 20px; padding: 4px 12px; font-size: 0.7rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+.sort-chip.active { background: rgba(77,255,145,0.15); border-color: #4dff91; color: #4dff91; }
+.filter-panel { display: none; margin-bottom: 8px; }
+.filter-panel.open { display: flex; gap: 6px; }
+.filter-panel select { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #f0f4ff; font-size: 0.75rem; }
+.active-filters { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.active-filter { background: rgba(77,255,145,0.1); border: 1px solid rgba(77,255,145,0.3); border-radius: 12px; padding: 2px 8px; font-size: 0.65rem; color: #4dff91; cursor: pointer; }
+
+.zone-chips { display: flex; gap: 6px; flex-wrap: nowrap; }
+#surf-zone-chips, #city-chips { background: #0a0e27; }
+#surf-zone-chips::-webkit-scrollbar, #city-chips::-webkit-scrollbar { display: none; }
+#surf-zone-chips, #city-chips { scrollbar-width: none; }
+.zone-chip { border-radius: 16px; padding: 4px 10px; font-size: 0.65rem; white-space: nowrap; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); transition: all 0.15s; }
+.zone-chip.active { background: rgba(0,207,255,0.12); border-color: rgba(0,207,255,0.4); color: #00cfff; font-weight: 600; }
+
+.spot-row { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+.spot-row:active { background: rgba(255,255,255,0.08); }
+.spot-row-info { flex: 1; min-width: 0; }
+.spot-row-name { color: #f0f4ff; font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spot-row-meta { color: rgba(255,255,255,0.4); font-size: 0.7rem; margin-top: 2px; }
+
+.spots-load-more { width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.8rem; margin-top: 8px; }
+.spots-load-more:disabled { opacity: 0.4; cursor: default; }
+
+.gmaps-btn { display: block; width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f0f4ff; text-align: center; text-decoration: none; font-size: 0.85rem; margin: 12px 0; }
+.spot-chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.spot-char { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; text-align: center; }
+.spot-char-label { color: rgba(255,255,255,0.35); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.spot-char-value { color: #f0f4ff; font-size: 0.85rem; font-weight: 600; }
+.spot-char-sub { color: rgba(255,255,255,0.3); font-size: 0.65rem; margin-top: 2px; }
+.spot-wind-box { background: rgba(0,207,255,0.06); border: 1px solid rgba(0,207,255,0.2); border-radius: 10px; padding: 10px; display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+/* ===== SESSION SHARE CARD OVERLAY ===== */
+#share-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10,14,39,0.95);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+#share-overlay.hidden { display: none; }
+.share-card {
+  background: #0d2137;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 28px 24px;
+  width: 340px;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+}
+.share-card h2 { color: #f0f4ff; font-size: 1.3rem; margin: 0 0 6px; }
+.share-card .share-check { font-size: 40px; margin-bottom: 8px; }
+.share-card .share-spot { color: #f0f4ff; font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+.share-card .share-meta { color: rgba(255,255,255,0.5); font-size: 0.85rem; margin-bottom: 20px; }
+.share-card .share-stars { color: #ffd700; }
+.share-btn-primary {
+  display: block; width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: #4dff91; color: #0a0e27; font-size: 1rem; font-weight: 700;
+  cursor: pointer; margin-bottom: 12px;
+}
+.share-btn-primary:active { opacity: 0.85; }
+.share-btn-skip {
+  background: none; border: none; color: rgba(255,255,255,0.45);
+  font-size: 0.9rem; cursor: pointer; padding: 8px;
+}
+.share-btn-skip:hover { color: rgba(255,255,255,0.7); }
+.share-preview-img {
+  width: 100%; max-width: 300px; border-radius: 10px;
+  margin: 0 auto 16px; display: block;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.share-btn-row {
+  display: flex; gap: 10px; justify-content: center; margin-bottom: 12px;
+}
+.share-btn-row button {
+  flex: 1; padding: 12px; border: none; border-radius: 10px;
+  font-size: 0.9rem; font-weight: 600; cursor: pointer;
+}
+.share-btn-save {
+  background: rgba(255,255,255,0.1); color: #f0f4ff;
+}
+.share-btn-share {
+  background: #4dff91; color: #0a0e27;
+}
+.share-file-input { display: none; }
+    </style>
+</head>
+<body>
+<div class="app">
+  <div class="tab-content">
+
+    <!-- ===== ACCUEIL ===== -->
+    <div id="tab-accueil" class="tab-panel active">
+      <div id="accueil-content">
+        <div class="loading">🌊 Chargement...</div>
+      </div>
+    </div>
+
+    <!-- ===== SPOTS ===== -->
+    <div id="tab-spots" class="tab-panel">
+      <div class="spot-list-view" id="spots-list-view">
+        <div id="fav-strip-container"></div>
+        <input type="text" class="spots-search" id="spots-search" placeholder="🔍 Rechercher un spot...">
+        <div class="sort-chips">
+            <div class="sort-chip active" data-sort="az" onclick="setSpotsSort('az')">A→Z</div>
+            <div class="sort-chip" data-sort="distance" onclick="setSpotsSort('distance')">📍 Distance</div>
+            <div class="sort-chip" data-sort="filter" onclick="toggleFilterPanel()">🔽 Filtrer</div>
+        </div>
+        <div id="active-filters" class="active-filters"></div>
+        <div id="filter-panel" class="filter-panel">
+            <select id="spots-country" onchange="onSpotsCountryChange()"><option value="">Pays</option></select>
+        </div>
+        <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:8px;padding-bottom:4px"></div>
+        <div id="city-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:4px"></div>
+        <div id="spots-list"></div>
+        <button id="spots-load-more" class="spots-load-more" onclick="loadMoreSpots()">Voir plus</button>
+      </div>
+      <div class="spot-detail" id="spot-detail"></div>
+    </div>
+
+    <!-- ===== SESSION ===== -->
+    <div id="tab-session" class="tab-panel">
+      <!-- Switcher -->
+      <div style="display:flex;gap:6px;padding:12px 14px 4px">
+        <button id="btn-add-session" class="switcher-btn active" onclick="showSessionView('add')">➕ Ajouter</button>
+        <button id="btn-history" class="switcher-btn" onclick="showSessionView('history')">📋 Historique</button>
+      </div>
+
+      <!-- Vue Ajouter -->
+      <div id="session-add-view" style="padding-top:4px">
+        <div style="padding-top:8px">
+          <div id="session-feedback"></div>
+
+          <div class="card">
+            <span class="section-label">📍 Spot</span>
+            <select id="session-spot" required>
+              <option value="">Sélectionnez un spot</option>
+            </select>
+          </div>
+
+          <div class="card">
+            <div class="datetime-row">
+              <div class="form-group" style="margin:0">
+                <label>Date</label>
+                <input type="date" id="session-date" required>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Heure</label>
+                <input type="time" id="session-time" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="section-label">Note de la session</span>
+            <div class="star-selector" id="star-selector">
+              <input type="radio" name="rating" id="r5" value="5"><label for="r5">★</label>
+              <input type="radio" name="rating" id="r4" value="4"><label for="r4">★</label>
+              <input type="radio" name="rating" id="r3" value="3"><label for="r3">★</label>
+              <input type="radio" name="rating" id="r2" value="2"><label for="r2">★</label>
+              <input type="radio" name="rating" id="r1" value="1"><label for="r1">★</label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="form-group" style="margin-bottom:10px">
+              <label>Board (optionnel)</label>
+              <select id="session-board">
+                <option value="">Aucune board sélectionnée</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>Notes libres</label>
+              <textarea id="session-notes" rows="3" placeholder="Comment était la session ?"></textarea>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="submitSession()">Enregistrer la session</button>
+        </div>
+      </div>
+
+      <!-- Vue Historique -->
+      <div id="session-history-view" style="display:none;padding:0 14px"></div>
+    </div>
+
+    <!-- ===== PROFIL ===== -->
+    <div id="tab-profil" class="tab-panel">
+      <div id="profil-content">
+        <div class="loading">Chargement...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Navigation bas -->
+  <nav class="bottom-nav">
+    <button class="nav-tab active" onclick="showTab('accueil', this)">
+      <span class="nav-icon">🏄‍♂️</span><span class="nav-label">Accueil</span>
+    </button>
+    <button class="nav-tab" onclick="showTab('spots', this)">
+      <span class="nav-icon">📍</span><span class="nav-label">Spots</span>
+    </button>
+    <button class="nav-tab" onclick="showTab('session', this)">
+      <span class="nav-icon">➕</span><span class="nav-label">Session</span>
+    </button>
+    <button class="nav-tab" onclick="showTab('profil', this)">
+      <span class="nav-icon">👤</span><span class="nav-label">Profil</span>
+    </button>
+  </nav>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // ========================================
+        // GESTIONNAIRE CENTRALISÉ DE DONNÉES SURFAI
+        // ========================================
+
+        class SurfAIDataManager {
+            constructor(backendUrl, supabaseClient = null) {
+                this.backendUrl = backendUrl;
+                this.supabase = supabaseClient;
+                this.cache = {
+                    weatherData: new Map(),
+                    aiPreferences: null,
+                    userProfile: null,
+                    spots: null,
+                    boards: null,
+                    lastUpdate: new Map()
+                };
+                this.subscribers = new Map();
+                this.weatherCacheTimeout = 30 * 60 * 1000; // 30 min
+                this.staticCacheTimeout = 24 * 60 * 60 * 1000; // 24h
+                this.currentUserId = null;
+            }
+
+            // GESTION SPOTS
+            async getSpots() {
+                if (this.cache.spots && this.isCacheValid('spots', this.staticCacheTimeout)) {
+                    return this.cache.spots;
+                }
+
+                if (this.supabase) {
+                    try {
+                        const { data: spots, error } = await this.supabase
+                            .from('spots')
+                            .select('*')
+                            .order('country, region, city, name');
+
+                        if (error) throw error;
+                        const hierarchy = this.buildSpotHierarchy(spots);
+                        this.cache.spots = hierarchy;
+                        this.cache.lastUpdate.set('spots', Date.now());
+                        return hierarchy;
+                    } catch (error) {
+                        console.warn('Erreur Supabase spots, fallback:', error);
+                    }
+                }
+
+                // Fallback spots par défaut
+                const defaultSpots = this.getFallbackSpots();
+                this.cache.spots = defaultSpots;
+                return defaultSpots;
+            }
+
+            buildSpotHierarchy(spots) {
+                const hierarchy = {};
+                spots.forEach(spot => {
+                    if (!hierarchy[spot.country]) hierarchy[spot.country] = {};
+                    if (!hierarchy[spot.country][spot.region]) hierarchy[spot.country][spot.region] = {};
+                    if (!hierarchy[spot.country][spot.region][spot.city]) hierarchy[spot.country][spot.region][spot.city] = [];
+                    
+                    hierarchy[spot.country][spot.region][spot.city].push({
+                        id: spot.id,
+                        name: spot.name,
+                        coords: spot.coordinates,
+                        type: spot.type,
+                        difficulty: spot.difficulty
+                    });
+                });
+                return hierarchy;
+            }
+
+            async getSpotsByLevel(country = null, region = null, city = null) {
+                const hierarchy = await this.getSpots();
+                if (!country) return Object.keys(hierarchy);
+                if (!region) return Object.keys(hierarchy[country] || {});
+                if (!city) return Object.keys(hierarchy[country]?.[region] || {});
+                return hierarchy[country]?.[region]?.[city] || [];
+            }
+
+            async findSpotById(spotId) {
+                const hierarchy = await this.getSpots();
+                for (const country of Object.values(hierarchy)) {
+                    for (const region of Object.values(country)) {
+                        for (const city of Object.values(region)) {
+                            const spot = city.find(s => s.id === spotId);
+                            if (spot) return spot;
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // GESTION MÉTÉO
+            async getWeatherData(spotId, forceRefresh = false) {
+                const cacheKey = `weather_${spotId}`;
+                
+                if (!forceRefresh && this.cache.weatherData.has(spotId)) {
+                    const cached = this.cache.weatherData.get(spotId);
+                    if (this.isCacheValid(cacheKey, this.weatherCacheTimeout)) {
+                        return cached;
+                    }
+                }
+
+                try {
+                    const spot = await this.findSpotById(spotId);
+                    const spotName = spot ? spot.name : spotId;
+                    
+                    const weatherData = await this.fetchFromBackend(`/api/v1/sessions/weather/auto?spot=${spotName}`);
+                    
+                    if (weatherData.success) {
+                        const processedData = this.processWeatherData(weatherData.weather, spot);
+                        this.cache.weatherData.set(spotId, processedData);
+                        this.cache.lastUpdate.set(cacheKey, Date.now());
+                        
+                        if (this.supabase) {
+                            await this.cacheWeatherInSupabase(spotId, processedData);
+                        }
+                        
+                        return processedData;
+                    }
+                } catch (error) {
+                    console.warn('Backend météo indisponible:', error);
+                }
+
+                return this.getDefaultWeatherData();
+            }
+
+            async cacheWeatherInSupabase(spotId, weatherData) {
+                if (!this.supabase) return;
+                try {
+                    await this.supabase
+                        .from('weather_cache')
+                        .upsert({
+                            spot_id: spotId,
+                            timestamp: new Date(),
+                            wave_height: weatherData.waveHeight,
+                            wave_period: weatherData.wavePeriod,
+                            wind_speed: weatherData.windSpeed,
+                            wind_direction: weatherData.windDirection,
+                            tide: weatherData.tide,
+                            water_temp: weatherData.waterTemp,
+                            confidence: weatherData.confidence
+                        });
+                } catch (error) {
+                    console.warn('Erreur cache météo Supabase:', error);
+                }
+            }
+
+            // GESTION PROFIL & BOARDS
+            async getUserProfile(userId) {
+                if (this.cache.userProfile && this.isCacheValid('profile', this.staticCacheTimeout)) {
+                    return this.cache.userProfile;
+                }
+
+                if (this.supabase) {
+                    try {
+                        const { data: profile, error } = await this.supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', userId)
+                            .single();
+
+                        if (error && error.code !== 'PGRST116') throw error;
+                        this.cache.userProfile = profile || this.getDefaultProfile();
+                        this.cache.lastUpdate.set('profile', Date.now());
+                        return this.cache.userProfile;
+                    } catch (error) {
+                        console.warn('Erreur profil Supabase:', error);
+                    }
+                }
+
+                return this.getDefaultProfile();
+            }
+
+            async getUserBoards(userId) {
+                if (this.cache.boards && this.isCacheValid('boards', this.staticCacheTimeout)) {
+                    return this.cache.boards;
+                }
+
+                if (this.supabase) {
+                    try {
+                        const { data: boards, error } = await this.supabase
+                            .from('boards')
+                            .select('*')
+                            .eq('user_id', userId)
+                            .order('created_at', { ascending: false });
+
+                        if (error) throw error;
+                        this.cache.boards = boards || [];
+                        this.cache.lastUpdate.set('boards', Date.now());
+                        return this.cache.boards;
+                    } catch (error) {
+                        console.warn('Erreur boards Supabase:', error);
+                    }
+                }
+
+                // Fallback localStorage
+                const localBoards = JSON.parse(localStorage.getItem('surfai_boards') || '[]');
+                this.cache.boards = localBoards;
+                return localBoards;
+            }
+
+            async saveUserBoard(userId, board) {
+                if (this.supabase) {
+                    try {
+                        const { data, error } = await this.supabase
+                            .from('boards')
+                            .insert([{
+                                user_id: userId,
+                                name: board.name,
+                                size: board.size,
+                                type: board.type,
+                                shaper: board.shaper
+                            }])
+                            .select();
+
+                        if (error) throw error;
+                        this.cache.boards = null;
+                        return data;
+                    } catch (error) {
+                        console.warn('Erreur sauvegarde board Supabase:', error);
+                    }
+                }
+
+                // Fallback localStorage
+                const boards = JSON.parse(localStorage.getItem('surfai_boards') || '[]');
+                const newBoard = { ...board, id: Date.now() };
+                boards.push(newBoard);
+                localStorage.setItem('surfai_boards', JSON.stringify(boards));
+                this.cache.boards = null;
+                return [newBoard];
+            }
+
+            // PRÉDICTIONS PERSONNALISÉES
+            async getPersonalizedPrediction(userId, spotId, boardId = null) {
+                try {
+                    const [weatherData, aiPreferences, profile, boards] = await Promise.all([
+                        this.getWeatherData(spotId),
+                        this.getAIPreferences(userId),
+                        this.getUserProfile(userId),
+                        this.getUserBoards(userId)
+                    ]);
+
+                    const selectedBoard = boardId ? boards.find(b => b.id == boardId) : null;
+                    const score = this.calculatePersonalizedScore(weatherData, aiPreferences, profile, selectedBoard);
+
+                    return {
+                        spotId,
+                        boardId,
+                        weather: weatherData,
+                        score: score,
+                        recommendation: this.generateRecommendation(score, weatherData, profile),
+                        timestamp: new Date().toISOString()
+                    };
+                } catch (error) {
+                    console.error('Erreur prédiction personnalisée:', error);
+                    throw error;
+                }
+            }
+
+            calculatePersonalizedScore(weather, aiPrefs, profile, board) {
+                let score = 5.0;
+                
+                // Facteur conditions météo (40%)
+                if (aiPrefs && aiPrefs.wavePreferences) {
+                    const waveOptimal = aiPrefs.wavePreferences.optimalHeight.value;
+                    const waveDiff = Math.abs(weather.waveHeight - waveOptimal);
+                    score -= waveDiff * 1.5;
+                }
+                
+                if (aiPrefs && aiPrefs.windPreferences) {
+                    const windOptimal = aiPrefs.windPreferences.optimalSpeed.value;
+                    const windDiff = Math.abs(weather.windSpeed - windOptimal);
+                    score -= windDiff * 0.08;
+                }
+
+                // Facteur niveau utilisateur (30%)
+                const levelFactor = this.getLevelFactor(profile.level, weather);
+                score *= levelFactor;
+
+                // Facteur board adaptée (20%)
+                if (board) {
+                    const boardFactor = this.getBoardFactor(board, weather, profile);
+                    score *= boardFactor;
+                }
+
+                // Facteur confiance données (10%)
+                score *= (weather.confidence || 0.7);
+
+                return Math.max(1, Math.min(10, score));
+            }
+
+            getBoardFactor(board, weather, profile) {
+                let factor = 1.0;
+                
+                const boardAdaptation = {
+                    'longboard': { minWave: 0.3, maxWave: 1.5, skillBonus: 0.1 },
+                    'shortboard': { minWave: 1.0, maxWave: 4.0, skillPenalty: 0.2 },
+                    'fish': { minWave: 0.5, maxWave: 2.0, speedBonus: 0.15 },
+                    'midlength': { minWave: 0.6, maxWave: 2.5, versatile: 0.1 }
+                };
+
+                const adaptation = boardAdaptation[board.type];
+                if (adaptation) {
+                    if (weather.waveHeight >= adaptation.minWave && weather.waveHeight <= adaptation.maxWave) {
+                        factor += 0.1;
+                    }
+                    
+                    if (adaptation.skillBonus && profile.level === 'beginner') {
+                        factor += adaptation.skillBonus;
+                    }
+                    
+                    if (adaptation.skillPenalty && profile.level === 'beginner') {
+                        factor -= adaptation.skillPenalty;
+                    }
+                }
+                
+                return Math.max(0.7, Math.min(1.3, factor));
+            }
+
+            // UTILITAIRES
+            async fetchFromBackend(endpoint, options = {}) {
+                const url = `${this.backendUrl}${endpoint}`;
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                return await response.json();
+            }
+
+            async getAIPreferences(userId) {
+                if (this.cache.aiPreferences && this.isCacheValid('ai_prefs', this.weatherCacheTimeout)) {
+                    return this.cache.aiPreferences;
+                }
+
+                try {
+                    const data = await this.fetchFromBackend(`/api/v1/ai/demo/${userId}`);
+                    this.cache.aiPreferences = data.userPreferences;
+                    this.cache.lastUpdate.set('ai_prefs', Date.now());
+                    return this.cache.aiPreferences;
+                } catch (error) {
+                    console.warn('Erreur préférences IA:', error);
+                    return null;
+                }
+            }
+
+            isCacheValid(key, timeout) {
+                const lastUpdate = this.cache.lastUpdate.get(key);
+                return lastUpdate && (Date.now() - lastUpdate) < timeout;
+            }
+
+            processWeatherData(raw, spot) {
+                return {
+                    waveHeight: raw.waveHeight || 0,
+                    wavePeriod: raw.wavePeriod || 10,
+                    windSpeed: raw.windSpeed || 10,
+                    windDirection: raw.windDirection || 'N',
+                    tide: raw.tide || 'mid',
+                    waterTemp: raw.waterTemp || 15,
+                    confidence: raw.confidence || 0.7,
+                    timestamp: new Date().toISOString(),
+                    source: 'backend',
+                    spot: spot
+                };
+            }
+
+            getFallbackSpots() {
+                return {
+                    'France': {
+                        'Nouvelle-Aquitaine': {
+                            'Biarritz': [
+                                { id: 'biarritz-grande-plage', name: 'Grande Plage', coords: { lat: 43.4832, lng: -1.5586 }, type: 'beach_break', difficulty: 'beginner' },
+                                { id: 'biarritz-miramar', name: 'Miramar', coords: { lat: 43.4825, lng: -1.5595 }, type: 'beach_break', difficulty: 'intermediate' },
+                                { id: 'biarritz-cote-basques', name: 'Côte des Basques', coords: { lat: 43.4821, lng: -1.5601 }, type: 'reef_break', difficulty: 'intermediate' }
+                            ],
+                            'Anglet': [
+                                { id: 'anglet-chambre-amour', name: 'Chambre d\'Amour', coords: { lat: 43.5156, lng: -1.5267 }, type: 'beach_break', difficulty: 'intermediate' },
+                                { id: 'anglet-les-cavaliers', name: 'Les Cavaliers', coords: { lat: 43.5134, lng: -1.5278 }, type: 'beach_break', difficulty: 'beginner' }
+                            ],
+                            'Hossegor': [
+                                { id: 'hossegor-la-nord', name: 'La Nord', coords: { lat: 43.6619, lng: -1.4022 }, type: 'beach_break', difficulty: 'expert' },
+                                { id: 'hossegor-la-centrale', name: 'La Centrale', coords: { lat: 43.6615, lng: -1.4018 }, type: 'beach_break', difficulty: 'advanced' }
+                            ]
+                        }
+                    }
+                };
+            }
+
+            getDefaultWeatherData() {
+                return {
+                    waveHeight: 1.0,
+                    wavePeriod: 10,
+                    windSpeed: 15,
+                    windDirection: 'W',
+                    tide: 'mid',
+                    waterTemp: 15,
+                    confidence: 0.5,
+                    source: 'default'
+                };
+            }
+
+            getDefaultProfile() {
+                return {
+                    level: 'intermediate',
+                    preferences: { waveMin: 0.8, waveMax: 2.5 }
+                };
+            }
+
+            getLevelFactor(level, weather) {
+                const factors = {
+                    'beginner': weather.waveHeight > 1.5 ? 0.7 : 1.1,
+                    'intermediate': 1.0,
+                    'advanced': weather.waveHeight < 1.0 ? 0.9 : 1.1,
+                    'expert': weather.waveHeight < 1.5 ? 0.8 : 1.2
+                };
+                return factors[level] || 1.0;
+            }
+
+            generateRecommendation(score, weather, profile) {
+                if (score >= 8) return "Session PARFAITE pour vous ! Conditions idéales selon votre profil.";
+                if (score >= 7) return "Excellente session en perspective ! Très proche de vos préférences.";
+                if (score >= 6) return "Bonne session possible. Conditions favorables.";
+                if (score >= 5) return "Session correcte mais pas optimale pour votre niveau.";
+                return "Conditions peu favorables selon votre profil.";
+            }
+        }
+
+        // ========================================
+        // VARIABLES GLOBALES ET INITIALISATION
+        // ========================================
+        let backendUrl = window.location.hostname === 'localhost'
+            ? 'http://localhost:3001'
+            : 'https://surfai-backend.vercel.app';
+        let backendApiKey = null;
+        const DEFAULT_SUPABASE_URL = 'https://zssiqpxlqshsmhpqjzgb.supabase.co';
+        const DEFAULT_SUPABASE_KEY = 'sb_publishable_3C5uSVKx16FeKH7qlSGsRw_DYHWQlBC';
+        let supabaseClient = null;
+        let dataManager = null;
+        let userData = {
+            sessions: [],
+            spots: [],
+            favoriteSpots: [],
+            predictions: [],
+            profile: {},
+            boards: []
+        };
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Date par défaut pour le formulaire session
+            const dateEl = document.getElementById('session-date');
+            if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+
+            // Charger backend URL depuis localStorage
+            const savedBackendUrl = localStorage.getItem('backend_url');
+            const savedApiKey = localStorage.getItem('backend_api_key');
+            if (savedBackendUrl && savedBackendUrl.includes('localhost')) {
+                backendUrl = savedBackendUrl;
+            } else if (savedBackendUrl) {
+                localStorage.setItem('backend_url', backendUrl);
+            }
+            if (savedApiKey) backendApiKey = savedApiKey;
+
+            // Créer le client Supabase
+            supabaseClient = supabase.createClient(DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY);
+            dataManager = new SurfAIDataManager(backendUrl, supabaseClient);
+
+            // Lancer l'auth — rien ne charge avant onAuthStateChange
+            await initAuth();
+        });
+
+        // ========================================
+        // AUTH
+        // ========================================
+
+        async function initAuth() {
+            // Flag pour éviter double-init (onAuthStateChange + getSession)
+            let authHandled = false;
+
+            async function handleSignIn(session) {
+                if (authHandled) return;
+                authHandled = true;
+                dataManager.currentUserId = session.user.id;
+                dataManager.supabase = supabaseClient;
+                if (window.location.search.includes('code=')) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+                hideLoginOverlay();
+                await checkOnboarding(session.user.id);
+            }
+
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                // IMPORTANT : ne pas faire d'await dans ce callback (deadlock SDK v2)
+                // Déférer le travail async hors du callback
+                if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+                    setTimeout(() => handleSignIn(session), 0);
+                } else if (event === 'SIGNED_OUT') {
+                    authHandled = false;
+                    dataManager.currentUserId = null;
+                    userData = { sessions: [], spots: [], favoriteSpots: [], predictions: [], profile: {}, boards: [] };
+                    showLoginOverlay();
+                }
+            });
+
+            // Si ?code= dans l'URL, le SDK va l'échanger via onAuthStateChange
+            // On attend un peu pour laisser le callback se déclencher
+            if (window.location.search.includes('code=')) {
+                // Le SDK échange le code automatiquement, onAuthStateChange gèrera le SIGNED_IN
+                // Timeout de sécurité : si rien ne se passe en 5s, montrer le login
+                setTimeout(() => {
+                    if (!authHandled) {
+                        showLoginOverlay();
+                    }
+                }, 5000);
+                return;
+            }
+
+            // Pas de code dans l'URL : vérifier session existante
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                await handleSignIn(session);
+            } else {
+                showLoginOverlay();
+            }
+        }
+
+        async function initApp() {
+            await checkBackendConnection();
+            await loadHarmonizedData();
+            await loadSessions();
+            await loadAccueil();
+        }
+
+        async function signOut() {
+            await supabaseClient.auth.signOut();
+        }
+
+        // Bypass dev : connexion directe sans magic link
+        async function devSignIn() {
+            const DEV_USER_ID = '3ba8ad73-e2c6-49fe-ac88-c26b45551f4b';
+            dataManager.currentUserId = DEV_USER_ID;
+            dataManager.supabase = supabaseClient;
+            hideLoginOverlay();
+            await initApp();
+        }
+
+        // --- Overlay login ---
+
+        function showLoginOverlay() {
+            let overlay = document.getElementById('auth-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'auth-overlay';
+                overlay.innerHTML = `
+                    <div class="auth-card">
+                        <div class="auth-logo">🏄‍♂️</div>
+                        <h2>SurfAI</h2>
+                        <p class="auth-sub">Ton assistant surf intelligent</p>
+                        <input type="email" id="auth-email" placeholder="ton@email.com" />
+                        <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">
+                            Recevoir un lien de connexion
+                        </button>
+                        <button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev</button>
+                        <div class="auth-msg" id="auth-msg"></div>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#auth-email').addEventListener('keydown', e => {
+                    if (e.key === 'Enter') sendMagicLink();
+                });
+            }
+            overlay.classList.remove('hidden');
+        }
+
+        function hideLoginOverlay() {
+            const overlay = document.getElementById('auth-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        async function sendMagicLink() {
+            const emailEl = document.getElementById('auth-email');
+            const btn = document.getElementById('auth-btn');
+            const msg = document.getElementById('auth-msg');
+            const email = emailEl?.value?.trim();
+            if (!email || !email.includes('@')) {
+                msg.textContent = 'Adresse email invalide';
+                msg.className = 'auth-msg error';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Envoi...';
+            msg.textContent = '';
+            const { error } = await supabaseClient.auth.signInWithOtp({
+                email,
+                options: { emailRedirectTo: window.location.origin }
+            });
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                msg.className = 'auth-msg error';
+                btn.disabled = false;
+                btn.textContent = 'Recevoir un lien de connexion';
+            } else {
+                msg.textContent = '✉️ Vérifie ta boîte mail !';
+                msg.className = 'auth-msg success';
+                btn.textContent = 'Lien envoyé';
+            }
+        }
+
+        // --- Onboarding ---
+
+        async function checkOnboarding(userId) {
+            // Timeout de 5s pour éviter un hang si RLS bloque la requête
+            const profilePromise = supabaseClient
+                .from('profiles')
+                .select('id')
+                .eq('id', userId)
+                .maybeSingle();
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), 5000)
+            );
+            try {
+                const { data } = await Promise.race([profilePromise, timeoutPromise]);
+                if (!data) {
+                    showOnboarding(userId);
+                } else {
+                    await initApp();
+                }
+            } catch {
+                // Timeout ou erreur RLS → le profil existe probablement, lancer l'app
+                await initApp();
+            }
+        }
+
+        function showOnboarding(userId) {
+            // Garantir que l'overlay existe (cas retour magic link sans passage par showLoginOverlay)
+            if (!document.getElementById('auth-overlay')) showLoginOverlay();
+            const overlay = document.getElementById('auth-overlay');
+            overlay.classList.remove('hidden');
+
+            const card = overlay.querySelector('.auth-card');
+            if (!card) return;
+
+            card.innerHTML = `
+                <div class="auth-logo">🏄‍♂️</div>
+                <h2>Bienvenue !</h2>
+                <p class="auth-sub" id="onboarding-step-label">1 / 2 — Comment tu t'appelles ?</p>
+                <div id="onboarding-step-1">
+                    <input type="text" id="onboarding-pseudo" placeholder="Ton prénom ou pseudo"
+                        style="width:100%;box-sizing:border-box;padding:12px;border-radius:8px;
+                        border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);
+                        color:#f0f4ff;font-size:0.95rem;margin-bottom:12px;outline:none" />
+                    <button class="auth-btn" onclick="onboardingStep2()">Suivant →</button>
+                </div>
+                <div id="onboarding-step-2" style="display:none">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                        <button class="onboarding-level-btn" data-level="beginner" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Débutant</button>
+                        <button class="onboarding-level-btn" data-level="intermediate" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Intermédiaire</button>
+                        <button class="onboarding-level-btn" data-level="advanced" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Avancé</button>
+                        <button class="onboarding-level-btn" data-level="expert" onclick="selectLevel(this)"
+                            style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;cursor:pointer;font-size:0.88rem">Expert</button>
+                    </div>
+                    <button class="auth-btn" id="onboarding-finish-btn"
+                        onclick="finishOnboarding('${userId}')" disabled>
+                        C'est parti ! →
+                    </button>
+                </div>
+                <div class="auth-msg" id="onboarding-msg"></div>`;
+        }
+
+        function onboardingStep2() {
+            const pseudo = document.getElementById('onboarding-pseudo')?.value?.trim();
+            if (!pseudo) {
+                document.getElementById('onboarding-msg').textContent = 'Entre ton prénom ou pseudo';
+                document.getElementById('onboarding-msg').className = 'auth-msg error';
+                return;
+            }
+            document.getElementById('onboarding-step-1').style.display = 'none';
+            document.getElementById('onboarding-step-2').style.display = 'block';
+            document.getElementById('onboarding-step-label').textContent = '2 / 2 — Ton niveau de surf ?';
+            document.getElementById('onboarding-msg').textContent = '';
+        }
+
+        function selectLevel(btn) {
+            document.querySelectorAll('.onboarding-level-btn').forEach(b => {
+                b.style.background = 'rgba(255,255,255,0.06)';
+                b.style.borderColor = 'rgba(255,255,255,0.15)';
+                b.style.color = '#f0f4ff';
+            });
+            btn.style.background = 'rgba(77,255,145,0.15)';
+            btn.style.borderColor = '#4dff91';
+            btn.style.color = '#4dff91';
+            document.getElementById('onboarding-finish-btn').disabled = false;
+        }
+
+        async function finishOnboarding(userId) {
+            const pseudo = document.getElementById('onboarding-pseudo')?.value?.trim();
+            const levelBtn = document.querySelector('.onboarding-level-btn[style*="4dff91"]');
+            const level = levelBtn?.dataset?.level || 'intermediate';
+            const msg = document.getElementById('onboarding-msg');
+
+            const { error } = await supabaseClient.from('profiles').insert({
+                id: userId,
+                nickname: pseudo,
+                surf_level: level,
+                min_wave_height: 0.5,
+                max_wave_height: 2.0
+            });
+
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                msg.className = 'auth-msg error';
+                return;
+            }
+            hideLoginOverlay();
+            await initApp();
+        }
+
+        // ========================================
+        // CHARGEMENT DONNÉES HARMONISÉES
+        // ========================================
+        
+        async function loadHarmonizedData() {
+            try {
+                // Charger profil depuis localStorage
+                const savedProfile = localStorage.getItem('surfai_profile');
+                if (savedProfile) {
+                    try { userData.profile = JSON.parse(savedProfile); } catch (e) {}
+                }
+
+                // Charger spots hiérarchiques
+                await loadSpotsHierarchy();
+
+                // Charger boards utilisateur
+                await loadUserBoards();
+
+                // Charger profil legacy (boards rendering)
+                await loadProfile();
+
+                console.log('Données harmonisées chargées');
+            } catch (error) {
+                console.error('Erreur chargement données harmonisées:', error);
+            }
+        }
+
+        // ========================================
+        // ONGLET ACCUEIL
+        // ========================================
+
+        async function loadAccueil() {
+          const container = document.getElementById('accueil-content');
+          if (!container) return;
+
+          const userId = dataManager.currentUserId;
+          const profile = userData.profile || {};
+          const sessions = userData.sessions || [];
+          const nickname = profile.nickname || profile.pseudo || 'Surfeur';
+          const levelMap = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé', expert: 'Expert' };
+          const level = levelMap[profile.surf_level] || 'Intermédiaire';
+          const initials = nickname.substring(0, 1).toUpperCase();
+          const lastSession = sessions[0];
+          const lastDate = lastSession
+            ? new Date(lastSession.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+            : null;
+          const lastSpot = lastSession?.spots?.name || lastSession?.spot_id || '';
+
+          const heroHtml = `
+            <div class="hero">
+              <div class="hero-top">
+                <div class="avatar">🏄</div>
+                <div>
+                  <div class="hero-name">${nickname} · ${level}</div>
+                  <div class="hero-sub">${sessions.length} session${sessions.length !== 1 ? 's' : ''}${lastDate ? ' · dernière le ' + lastDate : ''}${lastSpot ? ' · ' + lastSpot : ''}</div>
+                </div>
+              </div>
+              <div id="meteo-bloc">
+                <div class="meteo-grid">
+                  <div><div class="meteo-val" id="m-water">–</div><div class="meteo-lbl">🌡️ eau</div></div>
+                  <div><div class="meteo-val" id="m-wind">–</div><div class="meteo-lbl">💨 vent</div></div>
+                  <div><div class="meteo-val" id="m-wave">–</div><div class="meteo-lbl">🌊 vagues</div></div>
+                  <div><div class="meteo-val" id="m-tide">–</div><div class="meteo-lbl">🌙 marée</div></div>
+                </div>
+                <div class="meteo-loc" id="meteo-loc">📍 Localisation en cours...</div>
+              </div>
+            </div>`;
+
+          const windowsHtml = `
+            <div class="card">
+              <span class="section-label">🎯 Meilleurs créneaux — 3 jours</span>
+              <div id="accueil-windows"><div class="loading">Analyse IA en cours...</div></div>
+            </div>`;
+
+          const quickHtml = `
+            <div class="quick-btns">
+              <button class="btn-quick" onclick="showTab('session', document.querySelectorAll('.nav-tab')[2])">➕ Session</button>
+              <button class="btn-quick" onclick="showTab('spots', document.querySelectorAll('.nav-tab')[1])">📍 Spots</button>
+            </div>`;
+
+          container.innerHTML = heroHtml + windowsHtml + quickHtml;
+
+          loadGeoWeather();
+          if (userId && supabaseClient) {
+            loadAccueilWindows(userId);
+          } else {
+            document.getElementById('accueil-windows').innerHTML = '<div class="empty">Connectez-vous pour voir vos créneaux personnalisés.</div>';
+          }
+        }
+
+        async function loadGeoWeather() {
+          const updateMeteo = (weather, locLabel) => {
+            document.getElementById('m-water').textContent = weather.waterTemp != null ? Math.round(weather.waterTemp) + '°' : '–';
+            document.getElementById('m-wind').textContent  = weather.windSpeed  != null ? Math.round(weather.windSpeed)  + 'km/h' : '–';
+            document.getElementById('m-wave').textContent  = weather.waveHeight != null ? weather.waveHeight.toFixed(1) + 'm' : '–';
+            document.getElementById('m-tide').textContent  = weather.nextTide ? weather.nextTide.label : '–';
+            const locEl = document.getElementById('meteo-loc');
+            if (locEl) locEl.textContent = locLabel;
+          };
+
+          const fetchWeatherCoords = async (lat, lng) => {
+            const res = await fetch(`${backendUrl}/api/v1/weather/current?lat=${lat}&lng=${lng}`);
+            const data = await res.json();
+            return data.success ? data.weather : null;
+          };
+
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                try {
+                  const { latitude, longitude } = pos.coords;
+                  const weather = await fetchWeatherCoords(latitude, longitude);
+                  if (weather) updateMeteo(weather, '📍 Position actuelle · maintenant');
+                } catch (e) {
+                  loadGeoWeatherFallback(fetchWeatherCoords, updateMeteo);
+                }
+              },
+              () => loadGeoWeatherFallback(fetchWeatherCoords, updateMeteo)
+            );
+          } else {
+            loadGeoWeatherFallback(fetchWeatherCoords, updateMeteo);
+          }
+        }
+
+        async function loadGeoWeatherFallback(fetchWeatherCoords, updateMeteo) {
+          try {
+            const homeSpot = JSON.parse(localStorage.getItem('home_spot') || 'null');
+            const lat  = homeSpot?.lat  ?? 43.48;
+            const lng  = homeSpot?.lng  ?? -1.56;
+            const name = homeSpot?.name ?? 'Biarritz';
+            const weather = await fetchWeatherCoords(lat, lng);
+            if (weather) updateMeteo(weather, `📍 ${name} · maintenant`);
+          } catch (e) {
+            const locEl = document.getElementById('meteo-loc');
+            if (locEl) locEl.textContent = '📍 Météo indisponible';
+          }
+        }
+
+        async function loadAccueilWindows(userId) {
+          const container = document.getElementById('accueil-windows');
+          if (!container) return;
+          try {
+            const res = await fetch(`${backendUrl}/api/v1/predictions/best-windows?userId=${userId}&days=3`);
+            const data = await res.json();
+
+            if (!data.success || !data.results?.length) {
+              container.innerHTML = '<div class="empty">Pas de créneaux disponibles — enregistrez des sessions.</div>';
+              return;
+            }
+
+            const allWindows = [];
+            data.results.forEach(spotResult => {
+              (spotResult.windows || []).forEach(w => {
+                allWindows.push({ ...w, spotName: spotResult.spot?.name || '' });
+              });
+            });
+            allWindows.sort((a, b) => b.score - a.score);
+            const top3 = allWindows.slice(0, 3);
+
+            if (!top3.length) {
+              container.innerHTML = '<div class="empty">Aucun créneau favorable sur 3 jours.</div>';
+              return;
+            }
+
+            container.innerHTML = top3.map(w => {
+              const scoreCls = w.score >= 8 ? 'score-green' : w.score >= 6 ? 'score-blue' : 'score-orange';
+              const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+              const board = w.boardSuggestion?.board?.name ? '· 🏄 ' + w.boardSuggestion.board.name : '';
+              return `
+                <div class="window-row">
+                  <div class="score-badge ${scoreCls}">${w.score}</div>
+                  <div class="window-info">
+                    <div class="window-title">${date} · ${w.timeWindow} · ${w.spotName}</div>
+                    <div class="window-meta">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h ${w.conditions?.windDirection || ''} ${board}</div>
+                    <div class="window-narrative">${w.narrative || ''}</div>
+                  </div>
+                </div>`;
+            }).join('');
+
+          } catch (e) {
+            const container2 = document.getElementById('accueil-windows');
+            if (container2) container2.innerHTML = '<div class="empty">Erreur chargement créneaux.</div>';
+          }
+        }
+
+        // ========================================
+        // ONGLET SPOTS
+        // ========================================
+
+        // Cache des scores IA par spotId
+        let _spotScoresCache = {};
+        let _userLat = null;
+        let _userLng = null;
+        let _spotsPage = 0;
+        let _spotsFilters = {};
+        let _spotsSort = 'az';
+        let _spotsLoaded = [];
+        let _spotsSearchTimeout = null;
+        const SPOTS_PAGE_SIZE = 30;
+
+        async function loadSpotsTab() {
+            _spotsPage = 0;
+            _spotsFilters = {};
+            _spotsSort = 'az';
+            _spotsLoaded = [];
+
+            const userId = dataManager.currentUserId;
+            prefetchSpotScores(userId);
+
+            // Request geolocation for distance sorting
+            if (_userLat == null && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => { _userLat = pos.coords.latitude; _userLng = pos.coords.longitude; },
+                    () => { /* silent */ }
+                );
+            }
+
+            await renderFavStrip();
+            await loadSpotsFilters();
+            await loadAndRenderSpots();
+
+            // Search avec debounce
+            const searchEl = document.getElementById('spots-search');
+            if (searchEl) {
+                searchEl.value = '';
+                searchEl.oninput = () => {
+                    clearTimeout(_spotsSearchTimeout);
+                    _spotsSearchTimeout = setTimeout(() => {
+                        _spotsFilters.search = searchEl.value.trim();
+                        _spotsPage = 0;
+                        _spotsLoaded = [];
+                        loadAndRenderSpots();
+                    }, 300);
+                };
+            }
+        }
+
+        async function loadAndRenderSpots() {
+            const list = document.getElementById('spots-list');
+            const btn = document.getElementById('spots-load-more');
+            if (!list) return;
+
+            if (_spotsPage === 0) list.innerHTML = '<div class="empty">Chargement...</div>';
+
+            let query = supabaseClient
+                .from('spots')
+                .select('id, name, city, region, country, lat, lng, wave_type, difficulty, surf_zone')
+                .range(_spotsPage * SPOTS_PAGE_SIZE, (_spotsPage + 1) * SPOTS_PAGE_SIZE - 1)
+                .order('name');
+
+            if (_spotsFilters.country) query = query.eq('country', _spotsFilters.country);
+            if (_spotsFilters.surf_zone) query = query.eq('surf_zone', _spotsFilters.surf_zone);
+            if (_spotsFilters.city) query = query.eq('city', _spotsFilters.city);
+            if (_spotsFilters.search && _spotsFilters.search.length >= 2) {
+                const s = _spotsFilters.search.replace(/[.,()]/g, '');
+                query = query.or(`name.ilike.%${s}%,city.ilike.%${s}%,region.ilike.%${s}%,country.ilike.%${s}%`);
+            }
+
+            const { data, error } = await query;
+            const spots = data || [];
+
+            if (_spotsPage === 0) {
+                _spotsLoaded = spots;
+                list.innerHTML = '';
+            } else {
+                _spotsLoaded.push(...spots);
+            }
+
+            // Sort client-side si distance
+            let sorted = [..._spotsLoaded];
+            if (_spotsSort === 'distance' && _userLat != null) {
+                sorted.sort((a, b) => {
+                    const da = haversineKm(a.lat, a.lng, _userLat, _userLng);
+                    const db = haversineKm(b.lat, b.lng, _userLat, _userLng);
+                    return da - db;
+                });
+            }
+
+            // Render
+            if (sorted.length === 0) {
+                list.innerHTML = '<div class="empty">Aucun spot trouvé.</div>';
+            } else {
+                list.innerHTML = sorted.map(s => {
+                    const waveType = s.wave_type ? s.wave_type.replace(/_/g, ' ') : '';
+                    const loc = [s.city, s.surf_zone || s.region, s.country].filter(Boolean).join(' · ');
+                    const meta = [loc, waveType].filter(Boolean).join(' · ');
+                    return `<div class="spot-row" onclick="showSpotDetail('${s.id}')">
+                        <div class="spot-row-info">
+                            <div class="spot-row-name">${s.name}</div>
+                            <div class="spot-row-meta">${meta}</div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Voir plus
+            if (btn) {
+                btn.style.display = spots.length < SPOTS_PAGE_SIZE ? 'none' : 'block';
+                btn.disabled = false;
+                btn.textContent = 'Voir plus';
+            }
+        }
+
+        function loadMoreSpots() {
+            const btn = document.getElementById('spots-load-more');
+            if (btn) { btn.disabled = true; btn.textContent = 'Chargement...'; }
+            _spotsPage++;
+            loadAndRenderSpots();
+        }
+
+        async function renderFavStrip() {
+            const container = document.getElementById('fav-strip-container');
+            if (!container) return;
+            const userId = dataManager.currentUserId;
+            if (!userId || !supabaseClient) {
+                container.innerHTML = '<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Connectez-vous pour voir vos favoris</div></div>';
+                return;
+            }
+
+            const { data } = await supabaseClient
+                .from('user_favorite_spots')
+                .select('spot_id, spots(id, name, city, lat, lng)')
+                .eq('user_id', userId);
+
+            const favs = (data || []).map(r => r.spots).filter(Boolean);
+
+            if (favs.length === 0) {
+                container.innerHTML = '<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Ajoute des spots en favoris</div></div>';
+                return;
+            }
+
+            const cards = favs.map(s => {
+                const score = _spotScoresCache?.[s.id]?.score;
+                const color = score >= 8 ? '#4dff91' : score >= 6 ? '#00cfff' : score ? '#ed8936' : 'rgba(255,255,255,0.2)';
+                return `<div class="fav-card" onclick="showSpotDetail('${s.id}')" style="border-color:${color}">
+                    ${score ? `<div class="fav-score" style="background:${color}">${score}</div>` : ''}
+                    <div class="fav-name">${s.name}</div>
+                    <div class="fav-city">${s.city || ''}</div>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div class="fav-strip-scroll">${cards}</div></div>`;
+        }
+
+        async function loadSpotsFilters() {
+            const countrySelect = document.getElementById('spots-country');
+            if (!countrySelect) return;
+            const { data } = await supabaseClient
+                .from('spots')
+                .select('country')
+                .not('country', 'is', null)
+                .order('country');
+            const countries = [...new Set((data || []).map(s => s.country))];
+            countrySelect.innerHTML = '<option value="">Tous les pays</option>' +
+                countries.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        async function onSpotsCountryChange() {
+            const country = document.getElementById('spots-country')?.value || '';
+            _spotsFilters.country = country || undefined;
+            _spotsFilters.surf_zone = undefined;
+
+            const zoneContainer = document.getElementById('surf-zone-chips');
+            if (country && zoneContainer) {
+                const { data } = await supabaseClient
+                    .from('spots')
+                    .select('surf_zone')
+                    .eq('country', country)
+                    .not('surf_zone', 'is', null);
+                const zones = [...new Set((data || []).map(s => s.surf_zone))].sort();
+                if (zones.length > 0) {
+                    zoneContainer.style.display = 'block';
+                    zoneContainer.innerHTML = `<div class="zone-chips">${zones.map(z =>
+                        `<div class="zone-chip" onclick="selectSurfZone(this, '${z.replace(/'/g, "\\'")}')">${z}</div>`
+                    ).join('')}</div>`;
+                } else {
+                    zoneContainer.style.display = 'none';
+                    zoneContainer.innerHTML = '';
+                }
+            } else if (zoneContainer) {
+                zoneContainer.style.display = 'none';
+                zoneContainer.innerHTML = '';
+            }
+
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        async function selectSurfZone(el, zone) {
+            const isActive = el.classList.contains('active');
+            document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('active'));
+            _spotsFilters.city = undefined;
+
+            if (isActive) {
+                _spotsFilters.surf_zone = undefined;
+                // Masquer les city chips
+                const cityContainer = document.getElementById('city-chips');
+                if (cityContainer) { cityContainer.style.display = 'none'; cityContainer.innerHTML = ''; }
+            } else {
+                el.classList.add('active');
+                _spotsFilters.surf_zone = zone;
+
+                // Drill-down : si >10 spots dans cette zone, afficher les villes
+                const cityContainer = document.getElementById('city-chips');
+                if (cityContainer) {
+                    const { data } = await supabaseClient
+                        .from('spots')
+                        .select('city')
+                        .eq('surf_zone', zone)
+                        .not('city', 'is', null);
+                    const cities = [...new Set((data || []).map(s => s.city))].sort();
+                    if (cities.length > 1 && data.length > 10) {
+                        cityContainer.style.display = 'block';
+                        cityContainer.innerHTML = `<div class="zone-chips">${cities.map(c =>
+                            `<div class="zone-chip" onclick="selectCity(this, '${c.replace(/'/g, "\\'")}')">${c}</div>`
+                        ).join('')}</div>`;
+                    } else {
+                        cityContainer.style.display = 'none';
+                        cityContainer.innerHTML = '';
+                    }
+                }
+            }
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function selectCity(el, city) {
+            const isActive = el.classList.contains('active');
+            document.querySelectorAll('#city-chips .zone-chip').forEach(c => c.classList.remove('active'));
+            if (isActive) {
+                _spotsFilters.city = undefined;
+            } else {
+                el.classList.add('active');
+                _spotsFilters.city = city;
+            }
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function renderActiveFilters() {
+            const el = document.getElementById('active-filters');
+            if (!el) return;
+            const chips = [];
+            if (_spotsFilters.country) chips.push(`<span class="active-filter" onclick="clearFilter('country')">✕ ${_spotsFilters.country}</span>`);
+            if (_spotsFilters.surf_zone) chips.push(`<span class="active-filter" onclick="clearFilter('surf_zone')">✕ ${_spotsFilters.surf_zone}</span>`);
+            if (_spotsFilters.city) chips.push(`<span class="active-filter" onclick="clearFilter('city')">✕ ${_spotsFilters.city}</span>`);
+            el.innerHTML = chips.join('');
+        }
+
+        function clearFilter(key) {
+            delete _spotsFilters[key];
+            if (key === 'country') {
+                delete _spotsFilters.surf_zone;
+                delete _spotsFilters.city;
+                document.getElementById('spots-country').value = '';
+                const zc = document.getElementById('surf-zone-chips');
+                if (zc) { zc.style.display = 'none'; zc.innerHTML = ''; }
+                const cc = document.getElementById('city-chips');
+                if (cc) { cc.style.display = 'none'; cc.innerHTML = ''; }
+            }
+            if (key === 'surf_zone') {
+                delete _spotsFilters.city;
+                document.querySelectorAll('#surf-zone-chips .zone-chip').forEach(c => c.classList.remove('active'));
+                const cc = document.getElementById('city-chips');
+                if (cc) { cc.style.display = 'none'; cc.innerHTML = ''; }
+            }
+            if (key === 'city') {
+                document.querySelectorAll('#city-chips .zone-chip').forEach(c => c.classList.remove('active'));
+            }
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function setSpotsSort(sort) {
+            _spotsSort = sort;
+            document.querySelectorAll('.sort-chip').forEach(c => c.classList.toggle('active', c.dataset.sort === sort));
+            if (sort === 'filter') { toggleFilterPanel(); return; }
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function toggleFilterPanel() {
+            document.getElementById('filter-panel')?.classList.toggle('open');
+        }
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const toRad = d => d * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLng = toRad(lng2 - lng1);
+            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        async function prefetchSpotScores(userId) {
+          if (!userId) return;
+          try {
+            const res = await fetch(`${backendUrl}/api/v1/predictions/best-windows?userId=${userId}&days=2`);
+            const data = await res.json();
+            if (!data.success || !data.results) return;
+            _spotScoresCache = {};
+            const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            data.results.forEach(spotResult => {
+              if (spotResult.spot?.id && spotResult.windows?.length) {
+                const tomorrowWindows = spotResult.windows.filter(w => w.date?.startsWith(tomorrowStr));
+                const bestScore = tomorrowWindows.length
+                  ? Math.max(...tomorrowWindows.map(w => w.score))
+                  : spotResult.windows[0]?.score;
+                if (bestScore) _spotScoresCache[spotResult.spot.id] = { score: bestScore };
+              }
+            });
+          } catch (e) { /* silencieux */ }
+        }
+
+        async function showSpotDetail(spotId) {
+            const detailEl = document.getElementById('spot-detail');
+            const listView = document.querySelector('.spot-list-view');
+            if (!detailEl || !listView) return;
+
+            listView.classList.add('hidden');
+            detailEl.classList.add('active');
+            detailEl.innerHTML = '<div class="empty">Chargement...</div>';
+
+            // Fetch spot complet
+            const { data: spot, error } = await supabaseClient
+                .from('spots')
+                .select('*')
+                .eq('id', spotId)
+                .single();
+
+            if (!spot) {
+                detailEl.innerHTML = '<div class="empty">Spot introuvable</div>';
+                return;
+            }
+
+            const userId = dataManager.currentUserId;
+            const score = _spotScoresCache?.[spotId]?.score;
+            const scoreColor = score >= 8 ? '#4dff91' : score >= 6 ? '#00cfff' : score ? '#ed8936' : 'rgba(255,255,255,0.3)';
+
+            // Check if favorited
+            let isFav = false;
+            if (userId && supabaseClient) {
+                const { data: favData } = await supabaseClient
+                    .from('user_favorite_spots')
+                    .select('spot_id')
+                    .eq('user_id', userId)
+                    .eq('spot_id', spotId);
+                isFav = favData?.length > 0;
+            }
+
+            // Difficulty mapping
+            const diffMap = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé', expert: 'Expert' };
+            const tideMap = { low: 'Basse', mid: 'Mi-marée', high: 'Haute' };
+
+            // Build characteristics cards
+            let charsHtml = '';
+            const chars = [];
+
+            if (spot.wave_type || spot.bottom_type) {
+                const val = (spot.wave_type || spot.bottom_type || '').replace(/_/g, ' ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Type de vague</div><div class="spot-char-value">🏖️ ${val.charAt(0).toUpperCase() + val.slice(1)}</div></div>`);
+            }
+            if (spot.difficulty?.length) {
+                const levels = spot.difficulty.map(d => diffMap[d] || d).join(' · ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Niveau</div><div class="spot-char-value">🔥 ${levels}</div></div>`);
+            }
+            if (spot.ideal_tide?.length) {
+                const tides = spot.ideal_tide.map(t => tideMap[t] || t).join(' · ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Marée idéale</div><div class="spot-char-value">🌙 ${tides}</div></div>`);
+            }
+            if (chars.length > 0) {
+                charsHtml = `<div class="spot-chars">${chars.join('')}</div>`;
+            }
+
+            // Wind box
+            let windHtml = '';
+            if (spot.ideal_wind?.length) {
+                windHtml = `<div class="spot-wind-box">
+                    <div style="font-size:1.5rem">💨</div>
+                    <div>
+                        <div style="color:#00cfff;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px">Vent idéal</div>
+                        <div style="color:#f0f4ff;font-size:0.85rem;font-weight:600">${spot.ideal_wind.join(', ')} (offshore)</div>
+                    </div>
+                </div>`;
+            }
+
+            // Google Maps
+            const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
+
+            // Location string
+            const loc = [spot.city, spot.region, spot.country].filter(Boolean).join(', ');
+
+            // Predictions (existing backend call)
+            let predsHtml = '<div class="empty">Prévisions indisponibles.</div>';
+            if (userId) {
+                try {
+                    const res = await fetch(`${backendUrl}/api/v1/predictions/spot/${spotId}?userId=${userId}&days=5`);
+                    const pData = await res.json();
+                    if (pData.success && pData.windows?.length) {
+                        predsHtml = pData.windows.slice(0, 8).map(w => {
+                            const wColor = w.score >= 8 ? '#4dff91' : w.score >= 6 ? '#00cfff' : '#ed8936';
+                            const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                            return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+                                <div style="background:${wColor};color:#0a0e27;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem;flex-shrink:0">${w.score}</div>
+                                <div style="flex:1">
+                                    <div style="color:#f0f4ff;font-size:0.75rem;font-weight:600">${date} · ${w.startTime || ''}–${w.endTime || ''}</div>
+                                    <div style="color:rgba(255,255,255,0.35);font-size:0.65rem">${w.narrative || ''}</div>
+                                </div>
+                            </div>`;
+                        }).join('');
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            // User sessions on this spot
+            const userSessions = (userData.sessions || []).filter(s => s.spot_id === spotId).slice(0, 5);
+            let sessHtml = '<div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Aucune session ici</div>';
+            if (userSessions.length > 0) {
+                sessHtml = userSessions.map(s => {
+                    const date = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                    return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+                        <span style="color:#f0f4ff;font-size:0.75rem">${date}</span>
+                        <span style="color:#f0f4ff;font-size:0.75rem">${'⭐'.repeat(s.rating || 0)}</span>
+                    </div>`;
+                }).join('');
+            }
+
+            detailEl.innerHTML = `
+                <div style="padding:12px">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+                        <div>
+                            <div onclick="backToSpotsList()" style="color:rgba(255,255,255,0.4);font-size:0.75rem;cursor:pointer;margin-bottom:8px">← Spots</div>
+                            <div style="color:#f0f4ff;font-size:1.1rem;font-weight:700">${spot.name}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-top:2px">${loc}</div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            ${score ? `<div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem">${score}</div>` : ''}
+                            <button onclick="toggleFavorite('${spotId}', this)" style="background:${isFav ? 'rgba(77,255,145,0.15)' : 'rgba(255,255,255,0.05)'};border:1px solid ${isFav ? '#4dff91' : 'rgba(255,255,255,0.15)'};border-radius:8px;padding:4px 10px;color:${isFav ? '#4dff91' : 'rgba(255,255,255,0.4)'};font-size:0.75rem;cursor:pointer" class="${isFav ? 'active' : ''}">${isFav ? '⭐ Favori' : '☆ Favori'}</button>
+                        </div>
+                    </div>
+                    ${charsHtml}
+                    ${windHtml}
+                    <a href="${gmapsUrl}" target="_blank" rel="noopener" class="gmaps-btn">📍 S'y rendre (Google Maps)</a>
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">📅 Prévisions 5 jours</div>
+                    ${predsHtml}
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">🏄 Mes sessions ici</div>
+                    ${sessHtml}
+                </div>`;
+        }
+
+        function backToSpotsList() {
+            document.querySelector('.spot-list-view')?.classList.remove('hidden');
+            document.getElementById('spot-detail')?.classList.remove('active');
+        }
+
+        async function toggleFavorite(spotId, btn) {
+          const isNowFav = !btn.classList.contains('active');
+          btn.classList.toggle('active');
+          btn.textContent = isNowFav ? '⭐ Favori' : '☆ Favori';
+          if (!dataManager.supabase) return;
+          const userId = dataManager.currentUserId;
+          if (!userId) return;
+          try {
+            if (isNowFav) {
+              await dataManager.supabase
+                .from('user_favorite_spots')
+                .upsert({ user_id: userId, spot_id: spotId });
+            } else {
+              await dataManager.supabase
+                .from('user_favorite_spots')
+                .delete()
+                .eq('user_id', userId)
+                .eq('spot_id', spotId);
+            }
+          } catch (e) {
+            console.warn('toggleFavorite:', e.message);
+          }
+        }
+
+        // ========================================
+        // ONGLET SESSION
+        // ========================================
+
+        async function loadSessionTab() {
+          showSessionView('add');
+          const now = new Date();
+          document.getElementById('session-date').value = now.toISOString().split('T')[0];
+          document.getElementById('session-time').value = now.toTimeString().slice(0, 5);
+          await populateSessionSpots();
+          const boardSelect = document.getElementById('session-board');
+          boardSelect.innerHTML = '<option value="">Aucune board</option>';
+          (userData.boards || []).forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id; opt.textContent = b.name + (b.size ? ' (' + b.size + ')' : '');
+            boardSelect.appendChild(opt);
+          });
+        }
+
+        async function populateSessionSpots() {
+          const select = document.getElementById('session-spot');
+          select.innerHTML = '<option value="">Sélectionnez un spot</option>';
+          try {
+            const userId = dataManager.currentUserId;
+            let favSpots = [];
+            if (userId && supabaseClient) {
+              const { data: favRows } = await dataManager.supabase
+                .from('user_favorite_spots')
+                .select('spot_id')
+                .eq('user_id', userId);
+              const favIds = (favRows || []).map(r => r.spot_id);
+                const allSpotsForFav = await dataManager.getSpots();
+              Object.values(allSpotsForFav).forEach(regions =>
+                Object.values(regions).forEach(cities =>
+                  Object.values(cities).forEach(spots =>
+                    spots.forEach(s => { if (favIds.includes(s.id)) favSpots.push(s); })
+                  )
+                )
+              );
+            }
+            if (favSpots.length) {
+              const grpFav = document.createElement('optgroup');
+              grpFav.label = '⭐ Mes favoris';
+              favSpots.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id; opt.textContent = s.name;
+                grpFav.appendChild(opt);
+              });
+              select.appendChild(grpFav);
+            }
+            const allSpots = await dataManager.getSpots();
+            const grpAll = document.createElement('optgroup');
+            grpAll.label = '🌍 Tous les spots';
+            const favIds = new Set(favSpots.map(s => s.id));
+            Object.values(allSpots).forEach(regions => {
+              Object.values(regions).forEach(cities => {
+                Object.values(cities).forEach(spots => {
+                  spots.forEach(s => {
+                    if (!favIds.has(s.id)) {
+                      const opt = document.createElement('option');
+                      opt.value = s.id; opt.textContent = s.name + (s.city ? ' (' + s.city + ')' : '');
+                      grpAll.appendChild(opt);
+                    }
+                  });
+                });
+              });
+            });
+            select.appendChild(grpAll);
+          } catch (e) {
+            console.error('Erreur chargement spots session:', e);
+          }
+        }
+
+        async function submitSession() {
+          const spotId  = document.getElementById('session-spot').value;
+          const date    = document.getElementById('session-date').value;
+          const time    = document.getElementById('session-time').value;
+          const notes   = document.getElementById('session-notes').value;
+          const boardId = document.getElementById('session-board').value;
+          const ratingEl = document.querySelector('input[name="rating"]:checked');
+          const rating = ratingEl ? parseInt(ratingEl.value) : null;
+
+          if (!spotId || !date || !time || !rating) {
+            showMessage('error', 'Veuillez remplir : spot, date, heure et note.', 'session-feedback');
+            return;
+          }
+
+          try {
+            const sessionData = {
+              userId:  dataManager.currentUserId,
+              spotId,
+              date,
+              time,
+              rating,
+              notes: notes || '',
+              boardId: boardId || null
+            };
+
+            const response = await fetch(`${backendUrl}/api/v1/sessions/quick`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify(sessionData)
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Erreur serveur');
+
+            // Capture spot name/city BEFORE form reset
+            const spotSelect = document.getElementById('session-spot');
+            const capturedSpotName = spotSelect.options[spotSelect.selectedIndex]?.text || '';
+            // Try to extract city from cached spot data
+            let capturedSpotCity = '';
+            try {
+              const allSpots = await dataManager.getSpots();
+              Object.values(allSpots).forEach(regions => {
+                Object.values(regions).forEach(cities => {
+                  Object.values(cities).forEach(spots => {
+                    spots.forEach(s => {
+                      if (s.id === spotId) capturedSpotCity = s.city || s.commune || '';
+                    });
+                  });
+                });
+              });
+            } catch(e) { /* ignore */ }
+
+            // Build share data before reset
+            const shareSessionData = {
+              spotName: capturedSpotName,
+              spotCity: capturedSpotCity,
+              date: date,
+              rating: rating,
+              nickname: (userData.profile && (userData.profile.nickname || userData.profile.pseudo)) || '',
+              meteo: result.meteo || null
+            };
+
+            // Reset form
+            document.getElementById('session-spot').value = '';
+            document.querySelectorAll('input[name="rating"]').forEach(r => r.checked = false);
+            document.getElementById('session-notes').value = '';
+            document.getElementById('session-board').value = '';
+            dataManager.cache.aiPreferences = null;
+            userData.sessions = [];
+            await loadSessions();
+
+            // Show share confirmation overlay instead of just a toast
+            showSessionConfirmation(shareSessionData);
+
+          } catch (error) {
+            showMessage('error', '❌ Erreur: ' + error.message, 'session-feedback');
+          }
+        }
+
+        // ========================================
+        // ONGLET PROFIL
+        // ========================================
+
+        async function loadProfilTab() {
+          const container = document.getElementById('profil-content');
+          if (!container) return;
+
+          const profile = userData.profile || {};
+          const boards  = userData.boards  || [];
+          const sessions = userData.sessions || [];
+          const nickname = profile.nickname || profile.pseudo || 'Surfeur';
+          const levelMap = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé', expert: 'Expert' };
+          const initials = nickname.substring(0, 1).toUpperCase();
+
+          // Charger la liste des spots pour le dropdown "spot de base"
+          let allSpotsList = [];
+          try {
+            const res = await fetch(`${backendUrl}/api/v1/spots`);
+            const data = await res.json();
+            allSpotsList = (data.spots || []).filter(s => s.lat && s.lng);
+          } catch (e) {}
+          const savedHomeSpot = JSON.parse(localStorage.getItem('home_spot') || 'null');
+          const spotsOptions = allSpotsList.map(s =>
+            `<option value="${s.id}" data-lat="${s.lat}" data-lng="${s.lng}" ${savedHomeSpot?.id === s.id ? 'selected' : ''}>${s.name} — ${s.city}</option>`
+          ).join('');
+
+          const identiteHtml = `
+            <div class="card" style="text-align:center;padding-bottom:18px">
+              <div class="profil-avatar">${initials}</div>
+              <div class="form-group" style="margin-bottom:10px">
+                <label>Pseudo</label>
+                <input type="text" id="profile-nickname" value="${nickname}" placeholder="Votre pseudo">
+              </div>
+              <div class="form-group" style="margin-bottom:10px">
+                <label>Niveau de surf</label>
+                <select id="profile-level">
+                  <option value="beginner"     ${profile.surf_level === 'beginner'     ? 'selected' : ''}>Débutant</option>
+                  <option value="intermediate" ${(!profile.surf_level || profile.surf_level === 'intermediate') ? 'selected' : ''}>Intermédiaire</option>
+                  <option value="advanced"     ${profile.surf_level === 'advanced'     ? 'selected' : ''}>Avancé</option>
+                  <option value="expert"       ${profile.surf_level === 'expert'       ? 'selected' : ''}>Expert</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:10px">
+                <label>📍 Spot de base (météo accueil)</label>
+                <select id="profile-home-spot">
+                  <option value="">— Choisir un spot —</option>
+                  ${spotsOptions}
+                </select>
+              </div>
+              <div class="datetime-row" style="margin-bottom:10px">
+                <div class="form-group" style="margin:0">
+                  <label>Vagues min (m)</label>
+                  <input type="number" id="profile-wave-min" step="0.1" min="0.3" max="5" value="${profile.min_wave_height || 0.5}" placeholder="0.5">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>Vagues max (m)</label>
+                  <input type="number" id="profile-wave-max" step="0.1" min="0.5" max="8" value="${profile.max_wave_height || 2.5}" placeholder="2.5">
+                </div>
+              </div>
+              <button class="btn-primary" onclick="saveProfile()">Sauvegarder</button>
+              <button onclick="signOut()" style="width:100%;margin-top:12px;padding:10px;
+                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
+                border-radius:8px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.85rem">
+                Se déconnecter
+              </button>
+            </div>`;
+
+          const boardsListHtml = boards.length
+            ? boards.map(b => `
+      <div class="board-row" id="board-row-${b.id}">
+        <div>
+          <div class="board-name">${b.name}</div>
+          <div class="board-meta">${b.size || ''} · ${b.type || ''} · ${b.shaper || ''}</div>
+        </div>
+        <button onclick="editBoard(${b.id})" style="background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:3px 8px;color:rgba(255,255,255,0.5);font-size:0.75rem;cursor:pointer">✏️</button>
+      </div>`).join('')
+            : '<div class="empty">Aucune board enregistrée.</div>';
+
+          const boardsHtml = `
+            <div class="card">
+              <span class="section-label">🏄 Mes boards</span>
+              <div id="user-boards-list">${boardsListHtml}</div>
+              <details style="margin-top:12px">
+                <summary style="cursor:pointer;font-size:0.78rem;color:#4dff91;list-style:none">+ Ajouter une board</summary>
+                <div style="padding-top:12px">
+                  <div class="form-group"><label>Nom</label><input type="text" id="board-name" placeholder="Ma longboard"></div>
+                  <div class="form-group"><label>Taille</label><input type="text" id="board-size" placeholder="9'2"></div>
+                  <div class="form-group">
+                    <label>Type</label>
+                    <select id="board-type">
+                      <option value="">Choisir</option>
+                      <option value="longboard">Longboard</option>
+                      <option value="midlength">Midlength</option>
+                      <option value="shortboard">Shortboard</option>
+                      <option value="fish">Fish</option>
+                      <option value="gun">Gun</option>
+                      <option value="funboard">Funboard</option>
+                      <option value="sup">SUP</option>
+                    </select>
+                  </div>
+                  <div class="form-group"><label>Shaper</label><input type="text" id="board-shaper" placeholder="Robert August"></div>
+                  <button class="btn-primary" onclick="addBoard()">Ajouter cette board</button>
+                </div>
+              </details>
+            </div>`;
+
+          const configHtml = `
+            <div style="margin-top:8px;padding:0 4px">
+              <button class="config-toggle" onclick="toggleConfig(this)">
+                <span>⚙️ Configuration avancée</span><span id="config-arrow">›</span>
+              </button>
+              <div class="config-body" id="config-body">
+                <div class="card">
+                  <div class="form-group"><label>Backend URL</label><input type="text" id="backend-url" value="${backendUrl}"></div>
+                  <div class="form-group"><label>Clé API (optionnelle)</label><input type="password" id="backend-api-key" value="${backendApiKey || ''}"></div>
+                  <button class="btn-primary" onclick="testBackendConnection()" style="margin-bottom:8px">Tester Backend</button>
+                  <div id="backend-test-result"></div>
+                </div>
+                <div id="app-status" style="font-size:0.75rem;color:#888;padding:8px 0">
+                  <div>Backend: ${backendUrl}</div>
+                  <div>IA: ${backendUrl ? '🟢 actif' : '🔴 inactif'}</div>
+                </div>
+              </div>
+            </div>`;
+
+          container.innerHTML = identiteHtml + boardsHtml + configHtml;
+        }
+
+        function toggleConfig(btn) {
+          const body = document.getElementById('config-body');
+          const arrow = document.getElementById('config-arrow');
+          if (!body) return;
+          body.classList.toggle('open');
+          if (arrow) arrow.textContent = body.classList.contains('open') ? '˅' : '›';
+        }
+
+        async function loadSpotsHierarchy() {
+            try {
+                const spots = await dataManager.getSpots();
+                
+                // Peupler tous les sélecteurs de pays
+                const countrySelectors = ['session-country', 'spots-country', 'forecast-country'];
+                const countries = Object.keys(spots);
+                
+                countrySelectors.forEach(selectorId => {
+                    const select = document.getElementById(selectorId);
+                    if (select) {
+                        select.innerHTML = '<option value="">Sélectionnez un pays</option>';
+                        countries.forEach(country => {
+                            select.innerHTML += `<option value="${country}">${country}</option>`;
+                        });
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Erreur chargement spots:', error);
+            }
+        }
+
+        async function loadUserBoards() {
+            try {
+                const boards = await dataManager.getUserBoards(dataManager.currentUserId);
+                
+                // Peupler sélecteurs de boards
+                const boardSelectors = ['session-board', 'forecast-board'];
+                
+                boardSelectors.forEach(selectorId => {
+                    const select = document.getElementById(selectorId);
+                    if (select) {
+                        select.innerHTML = '<option value="">Aucune board</option>';
+                        boards.forEach(board => {
+                            select.innerHTML += `<option value="${board.id}">${board.name} (${board.size})</option>`;
+                        });
+                    }
+                });
+                
+                // Mettre à jour userData pour compatibilité
+                userData.boards = boards;
+                
+            } catch (error) {
+                console.error('Erreur chargement boards:', error);
+            }
+        }
+
+        // ========================================
+        // GESTION BOARDS HARMONISÉE
+        // ========================================
+        
+        async function addBoard() {
+            const name = document.getElementById('board-name').value;
+            const size = document.getElementById('board-size').value;
+            const type = document.getElementById('board-type').value;
+            const shaper = document.getElementById('board-shaper').value;
+            
+            if (!name || !size || !type || !shaper) {
+                showMessage('error', 'Veuillez remplir tous les champs');
+                return;
+            }
+            
+            try {
+                const board = { name, size, type, shaper };
+                await dataManager.saveUserBoard(dataManager.currentUserId, board);
+                
+                // Reset form
+                document.getElementById('board-name').value = '';
+                document.getElementById('board-size').value = '';
+                document.getElementById('board-type').value = '';
+                document.getElementById('board-shaper').value = '';
+                
+                showMessage('success', 'Board ajoutée avec succès !');
+                
+                // Recharger boards dans tous les sélecteurs
+                await loadUserBoards();
+                await loadProfile();
+                
+            } catch (error) {
+                showMessage('error', `Erreur: ${error.message}`);
+            }
+        }
+
+        function editBoard(boardId) {
+          const board = (userData.boards || []).find(b => b.id == boardId);
+          if (!board) return;
+          const row = document.getElementById(`board-row-${boardId}`);
+          if (!row) return;
+          row.innerHTML = `
+            <div style="width:100%">
+              <div class="form-group" style="margin-bottom:6px">
+                <input type="text" id="edit-board-name-${boardId}" value="${board.name || ''}" placeholder="Nom">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+                <input type="text" id="edit-board-size-${boardId}" value="${board.size || ''}" placeholder="Taille (ex: 9'2)">
+                <select id="edit-board-type-${boardId}">
+                  <option value="">Type</option>
+                  ${['longboard','midlength','shortboard','fish','gun','funboard','sup'].map(t =>
+                    `<option value="${t}" ${board.type === t ? 'selected' : ''}>${t}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <input type="text" id="edit-board-shaper-${boardId}" value="${board.shaper || ''}" placeholder="Shaper"
+                style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#f0f4ff;padding:9px 12px;font-size:0.85rem;outline:none;margin-bottom:8px">
+              <div style="display:flex;gap:6px">
+                <button class="btn-primary" style="margin:0;padding:8px;font-size:0.82rem" onclick="saveBoard(${boardId})">Sauvegarder</button>
+                <button onclick="loadProfilTab()" style="flex:0.5;padding:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#f0f4ff;cursor:pointer;font-size:0.82rem">Annuler</button>
+              </div>
+            </div>`;
+        }
+
+        async function saveBoard(boardId) {
+          const name   = document.getElementById(`edit-board-name-${boardId}`)?.value;
+          const size   = document.getElementById(`edit-board-size-${boardId}`)?.value;
+          const type   = document.getElementById(`edit-board-type-${boardId}`)?.value;
+          const shaper = document.getElementById(`edit-board-shaper-${boardId}`)?.value;
+          if (!name) { showMessage('error', 'Le nom est requis'); return; }
+          try {
+            if (dataManager.supabase) {
+              const { error } = await dataManager.supabase
+                .from('boards')
+                .update({ name, size, type, shaper })
+                .eq('id', boardId)
+                .eq('user_id', dataManager.currentUserId);
+              if (error) throw new Error(error.message);
+            } else {
+              const boards = JSON.parse(localStorage.getItem('surfai_boards') || '[]');
+              const idx = boards.findIndex(b => b.id == boardId);
+              if (idx !== -1) boards[idx] = { ...boards[idx], name, size, type, shaper };
+              localStorage.setItem('surfai_boards', JSON.stringify(boards));
+            }
+            dataManager.cache.boards = null;
+            await loadUserBoards();
+            await loadProfilTab();
+          } catch (e) {
+            showMessage('error', 'Erreur sauvegarde : ' + e.message);
+          }
+        }
+
+        // ========================================
+        // FONCTIONS BACKEND (INCHANGÉES)
+        // ========================================
+
+        async function checkBackendConnection() {
+            try {
+                const response = await fetch(`${backendUrl}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateBackendStatus(true, 'Backend connecté et opérationnel');
+                    const ind = document.getElementById('backend-status-indicator');
+                    if (ind) ind.textContent = '🟢';
+                    return true;
+                } else {
+                    throw new Error('Backend non disponible');
+                }
+            } catch (error) {
+                updateBackendStatus(false, `Backend non accessible: ${error.message}`);
+                const ind = document.getElementById('backend-status-indicator');
+                if (ind) ind.textContent = '🔴';
+                return false;
+            }
+        }
+
+        function updateBackendStatus(connected, message) {
+            const statusDiv = document.getElementById('backend-status');
+            const indicator = document.getElementById('backend-indicator');
+            const messageEl = document.getElementById('backend-message');
+
+            if (connected) {
+                if (statusDiv) statusDiv.className = 'backend-status connected';
+                if (indicator) indicator.textContent = '🟢';
+            } else {
+                if (statusDiv) statusDiv.className = 'backend-status error';
+                if (indicator) indicator.textContent = '🔴';
+            }
+
+            if (messageEl) messageEl.textContent = message;
+        }
+
+        async function testBackendConnection() {
+            const url = document.getElementById('backend-url').value;
+            const apiKey = document.getElementById('backend-api-key').value;
+            const resultDiv = document.getElementById('backend-test-result');
+            
+            resultDiv.innerHTML = '<div class="loading">🧪 Test en cours...</div>';
+            
+            try {
+                backendUrl = url;
+                backendApiKey = apiKey;
+                localStorage.setItem('backend_url', url);
+                localStorage.setItem('backend_api_key', apiKey);
+                
+                // Mettre à jour gestionnaire centralisé
+                dataManager.backendUrl = url;
+                
+                const healthResponse = await fetch(`${url}/health`);
+                const healthData = await healthResponse.json();
+                
+                if (!healthResponse.ok) {
+                    throw new Error(`Backend non accessible (${healthResponse.status})`);
+                }
+                
+                const aiResponse = await fetch(`${url}/api/v1/ai/test`);
+                const aiData = await aiResponse.json();
+                
+                const weatherResponse = await fetch(`${url}/api/v1/sessions/weather/auto?spot=Biarritz`);
+                const weatherData = await weatherResponse.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ Backend SurfAI connecté !<br>
+                        🥼 Health: ${healthData.status}<br>
+                        🤖 IA Engine: ${aiData.status === 'UPGRADED_TO_V2' ? '✅ v2.0 Fonctionnel' : '⚠️ Basique'}<br>
+                        🌊 Météo Auto: ${weatherData.success ? '✅ Fonctionnel' : '❌ Erreur'}<br>
+                        📊 Confiance météo: ${weatherData.weather ? Math.round(weatherData.weather.confidence * 100) + '%' : 'N/A'}
+                    </div>
+                `;
+                
+                updateBackendStatus(true, 'Backend SurfAI v2.0 connecté et fonctionnel');
+                updateAppStatus();
+                
+            } catch (error) {
+                console.error('Erreur test backend:', error);
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ ${error.message}<br>
+                        Vérifiez que le backend est démarré sur le bon port.
+                    </div>
+                `;
+                updateBackendStatus(false, `Erreur: ${error.message}`);
+            }
+        }
+
+        // ========================================
+        // FONCTIONS UTILITAIRES ET NAVIGATION
+        // ========================================
+
+        function showSessionView(view) {
+          document.getElementById('session-add-view').style.display = view === 'add' ? '' : 'none';
+          document.getElementById('session-history-view').style.display = view === 'history' ? '' : 'none';
+          document.getElementById('btn-add-session').classList.toggle('active', view === 'add');
+          document.getElementById('btn-history').classList.toggle('active', view === 'history');
+          if (view === 'history') renderSessionHistory();
+        }
+
+        function renderSessionHistory() {
+          const container = document.getElementById('session-history-view');
+          if (!container) return;
+          const sessions = userData.sessions || [];
+          if (!sessions.length) {
+            container.innerHTML = '<div class="empty" style="padding-top:24px">Aucune session enregistrée.</div>';
+            return;
+          }
+          container.innerHTML = `
+            <div class="card">
+              <span class="section-label">📋 ${sessions.length} session${sessions.length > 1 ? 's' : ''}</span>
+              ${sessions.map(s => {
+                const date = new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+                const spot = s.spots?.name || s.spot_id || '?';
+                const stars = '★'.repeat(Math.min(s.rating || 0, 5));
+                const wh = s.meteo?.waveHeight;
+                const meteo = wh != null ? ` · 🌊 ${Number(wh).toFixed(1)}m` : '';
+                return `<div class="session-compact">
+                  <div>
+                    <div style="font-size:0.82rem;color:#f0f4ff">${date} · ${spot}</div>
+                    <div style="font-size:0.72rem;color:rgba(255,255,255,0.45)">${meteo}</div>
+                  </div>
+                  <span style="color:#4dff91;font-size:0.78rem">${stars}</span>
+                </div>`;
+              }).join('')}
+            </div>`;
+        }
+
+        function showTab(tabName, btn) {
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+          document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+          document.getElementById('tab-' + tabName).classList.add('active');
+          if (btn) btn.classList.add('active');
+          if (tabName === 'spots')   loadSpotsTab();
+          if (tabName === 'session') loadSessionTab();
+          if (tabName === 'profil')  loadProfilTab();
+        }
+
+        async function loadSessions() {
+            try {
+                const userId = dataManager.currentUserId;
+                if (!userId) return;
+                const res = await fetch(`${backendUrl}/api/v1/sessions/list?userId=${userId}`);
+                const data = await res.json();
+                const sessions = data.sessions || [];
+                userData.sessions = sessions;
+
+                // Rendu legacy (sessions-list n'existe plus dans la nouvelle UI)
+                const sessionsList = document.getElementById('sessions-list');
+                if (!sessionsList) return;
+                if (sessions.length === 0) {
+                    sessionsList.innerHTML = `<div class="card"><p>🏄‍♂️ Aucune session encore enregistrée.</p></div>`;
+                    return;
+                }
+                const html = sessions.map(s => {
+                    const spotName = s.spots?.name || s.spot_id || 'Spot inconnu';
+                    const date = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                    const stars = '⭐'.repeat(s.rating || 0);
+                    const meteo = s.meteo ? `🌊 ${s.meteo.waveHeight?.toFixed(1)}m • 💨 ${s.meteo.windSpeed?.toFixed(0)}km/h` : '';
+                    const notes = s.notes ? `<p style="color:#666;font-size:0.9rem;margin-top:6px">${s.notes}</p>` : '';
+                    return `
+                        <div class="card" style="margin-bottom:12px;border-left:4px solid #00cfff">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <strong>📍 ${spotName}</strong>
+                                <span style="color:#666;font-size:0.9rem">${date}</span>
+                            </div>
+                            <div style="margin-top:6px">${stars} ${meteo}</div>
+                            ${notes}
+                        </div>`;
+                }).join('');
+                sessionsList.innerHTML = `<div style="margin-bottom:12px;color:#666;font-size:0.9rem">${sessions.length} session${sessions.length > 1 ? 's' : ''} enregistrée${sessions.length > 1 ? 's' : ''}</div>${html}`;
+            } catch (error) {
+                console.error('Erreur chargement sessions:', error);
+            }
+        }
+
+        function loadSpots() {
+            const favoritesList = document.getElementById('favorite-spots-list');
+            favoritesList.innerHTML = `
+                <div class="card">
+                    <h4>⭐ Vos spots favoris</h4>
+                    <p>Navigation hiérarchique disponible ci-dessus</p>
+                </div>
+            `;
+        }
+
+        function loadProfile() {
+            // Guard: if new 4-tab layout is active, let loadProfilTab() handle boards rendering
+            if (document.getElementById('tab-profil')) return;
+
+            const boardsList = document.getElementById('user-boards-list');
+            if (!boardsList) return;
+
+            if (userData.boards && userData.boards.length > 0) {
+                const boardsHtml = userData.boards.map(board => `
+                    <div class="card">
+                        <h4>${board.name}</h4>
+                        <p>📏 Taille: ${board.size} • 🏄‍♂️ Type: ${board.type}</p>
+                        <p>🔨 Shaper: ${board.shaper}</p>
+                    </div>
+                `).join('');
+                // Commented out to avoid overwriting dark-theme board list
+                // boardsList.innerHTML = boardsHtml;
+            } else {
+                // Commented out to avoid overwriting dark-theme board list
+                // boardsList.innerHTML = `
+                //     <div class="card">
+                //         <p>🏄‍♂️ Ajoutez vos boards ci-dessus.</p>
+                //         <p>Elles seront intégrées dans les prédictions IA !</p>
+                //     </div>
+                // `;
+            }
+        }
+
+        function saveProfile() {
+            const nickname = document.getElementById('profile-nickname').value;
+            const level = document.getElementById('profile-level').value;
+            const waveMin = document.getElementById('profile-wave-min').value;
+            const waveMax = document.getElementById('profile-wave-max').value;
+
+            // Spot de base pour la météo accueil
+            const homeSpotSelect = document.getElementById('profile-home-spot');
+            if (homeSpotSelect && homeSpotSelect.value) {
+                const opt = homeSpotSelect.options[homeSpotSelect.selectedIndex];
+                localStorage.setItem('home_spot', JSON.stringify({
+                    id:   homeSpotSelect.value,
+                    name: opt.text.split(' — ')[0],
+                    lat:  parseFloat(opt.dataset.lat),
+                    lng:  parseFloat(opt.dataset.lng)
+                }));
+            }
+
+            userData.profile = {
+                nickname,
+                surf_level: level,
+                min_wave_height: parseFloat(waveMin) || 0.8,
+                max_wave_height: parseFloat(waveMax) || 2.5
+            };
+
+            localStorage.setItem('surfai_profile', JSON.stringify(userData.profile));
+            showMessage('success', 'Profil sauvegardé !');
+
+            // Recharger la home pour appliquer le nouveau spot de base
+            loadAccueil();
+        }
+
+        function showMessage(type, message, containerId) {
+          const cid = containerId || 'session-feedback';
+          const el = document.getElementById(cid);
+          if (!el) return;
+          const cls = type === 'success' ? 'msg-success' : 'msg-error';
+          el.innerHTML = `<div class="${cls}">${message}</div>`;
+          if (type === 'success') setTimeout(() => { el.innerHTML = ''; }, 3500);
+        }
+
+        function updateAppStatus() {
+            const statusDiv = document.getElementById('app-status');
+            if (!statusDiv) return;
+            statusDiv.innerHTML = `
+                <p>🟢 Backend: Connecté et fonctionnel</p>
+                <p>🟢 IA Engine: v2.0 Opérationnel</p>
+                <p>🟢 Données: Harmonisées et cohérentes</p>
+            `;
+        }
+
+        // ========================================
+        // SESSION SHARE CARD
+        // ========================================
+
+        function formatSessionDate(dateStr) {
+          const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+          const d = new Date(dateStr + 'T00:00:00');
+          return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+        }
+
+        function showSessionConfirmation(sessionData) {
+          // Remove existing overlay if any
+          const existing = document.getElementById('share-overlay');
+          if (existing) existing.remove();
+
+          const starsStr = sessionData.rating ? '★'.repeat(sessionData.rating) : '';
+          const dateStr = formatSessionDate(sessionData.date);
+          const spotLine = sessionData.spotCity
+            ? `${sessionData.spotName} · ${sessionData.spotCity}`
+            : sessionData.spotName;
+
+          const overlay = document.createElement('div');
+          overlay.id = 'share-overlay';
+          overlay.innerHTML = `
+            <div class="share-card">
+              <div class="share-check">&#10003;</div>
+              <h2>Session enregistree !</h2>
+              <p class="share-spot">${spotLine}</p>
+              <p class="share-meta">${dateStr}${starsStr ? ' · <span class="share-stars">' + starsStr + '</span>' : ''}</p>
+              <button class="share-btn-primary" id="share-pick-photo-btn">Partager ta session</button>
+              <input type="file" accept="image/*" class="share-file-input" id="share-file-input">
+              <button class="share-btn-skip" id="share-skip-btn">Passer</button>
+            </div>
+          `;
+          document.body.appendChild(overlay);
+
+          // Bind events
+          document.getElementById('share-skip-btn').addEventListener('click', () => {
+            overlay.remove();
+          });
+
+          const fileInput = document.getElementById('share-file-input');
+          document.getElementById('share-pick-photo-btn').addEventListener('click', () => {
+            fileInput.click();
+          });
+
+          fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            await showShareCardPreview(sessionData, file);
+          });
+        }
+
+        async function showShareCardPreview(sessionData, photoFile) {
+          const overlay = document.getElementById('share-overlay');
+          if (!overlay) return;
+
+          // Show loading state
+          overlay.querySelector('.share-card').innerHTML = '<p style="color:rgba(255,255,255,0.6)">Generation en cours...</p>';
+
+          try {
+            const canvas = await generateShareCard(photoFile, sessionData);
+            const previewUrl = canvas.toDataURL('image/png');
+
+            overlay.querySelector('.share-card').innerHTML = `
+              <img src="${previewUrl}" class="share-preview-img" alt="Preview">
+              <div class="share-btn-row">
+                <button class="share-btn-save" id="share-save-btn">Enregistrer</button>
+                <button class="share-btn-share" id="share-share-btn">Partager</button>
+              </div>
+              <button class="share-btn-skip" id="share-close-btn">Fermer</button>
+            `;
+
+            document.getElementById('share-close-btn').addEventListener('click', () => {
+              overlay.remove();
+            });
+
+            document.getElementById('share-save-btn').addEventListener('click', () => {
+              downloadShareCard(canvas, sessionData);
+            });
+
+            document.getElementById('share-share-btn').addEventListener('click', () => {
+              shareCard(canvas, sessionData);
+            });
+          } catch (err) {
+            console.error('Share card generation error:', err);
+            overlay.querySelector('.share-card').innerHTML = `
+              <p style="color:#ff6b6b">Erreur lors de la generation de l'image.</p>
+              <button class="share-btn-skip" onclick="document.getElementById('share-overlay').remove()">Fermer</button>
+            `;
+          }
+        }
+
+        function loadImage(file) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            if (file instanceof File) {
+              const reader = new FileReader();
+              reader.onload = (e) => { img.src = e.target.result; };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            } else {
+              img.src = file;
+            }
+          });
+        }
+
+        function drawImageCover(ctx, img, x, y, w, h) {
+          const imgRatio = img.width / img.height;
+          const canvasRatio = w / h;
+          let sx, sy, sw, sh;
+          if (imgRatio > canvasRatio) {
+            sh = img.height;
+            sw = sh * canvasRatio;
+            sx = (img.width - sw) / 2;
+            sy = 0;
+          } else {
+            sw = img.width;
+            sh = sw / canvasRatio;
+            sx = 0;
+            sy = (img.height - sh) / 2;
+          }
+          ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+        }
+
+        async function generateShareCard(photo, sessionData) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1080;
+          canvas.height = 1350;
+          const ctx = canvas.getContext('2d');
+
+          // 1. Draw photo as background (crop center cover)
+          const img = await loadImage(photo);
+          drawImageCover(ctx, img, 0, 0, 1080, 1350);
+
+          // 2. Gradient overlay on bottom half
+          const grad = ctx.createLinearGradient(0, 600, 0, 1350);
+          grad.addColorStop(0, 'rgba(10,14,39,0)');
+          grad.addColorStop(0.4, 'rgba(10,14,39,0.6)');
+          grad.addColorStop(1, 'rgba(10,14,39,0.9)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 600, 1080, 750);
+
+          // 3. Text overlay — build from bottom up
+          ctx.textAlign = 'center';
+          const cx = 540; // center x
+          let curY = 1290; // start near bottom
+
+          // Date
+          const dateStr = formatSessionDate(sessionData.date);
+          ctx.font = '22px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.fillText(dateStr, cx, curY);
+          curY -= 50;
+
+          // Rating stars + nickname line
+          const parts = [];
+          if (sessionData.rating) {
+            parts.push('★'.repeat(sessionData.rating));
+          }
+          if (sessionData.nickname) {
+            parts.push('@' + sessionData.nickname);
+          }
+          if (parts.length > 0) {
+            ctx.font = '24px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#f0f4ff';
+            ctx.fillText(parts.join('  ·  '), cx, curY);
+            curY -= 50;
+          }
+
+          // Conditions line (meteo)
+          if (sessionData.meteo) {
+            const m = sessionData.meteo;
+            const condParts = [];
+            if (m.waveHeight != null) condParts.push(m.waveHeight + 'm');
+            if (m.windSpeed != null) {
+              let windStr = m.windSpeed + ' km/h';
+              if (m.windDirection) windStr += ' ' + m.windDirection;
+              condParts.push(windStr);
+            }
+            if (m.wavePeriod != null) condParts.push(m.wavePeriod + 's');
+            if (condParts.length > 0) {
+              ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, sans-serif';
+              ctx.fillStyle = '#4dff91';
+              ctx.fillText(condParts.join('  ·  '), cx, curY);
+              curY -= 55;
+            }
+          }
+
+          // City
+          if (sessionData.spotCity) {
+            ctx.font = '28px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(sessionData.spotCity, cx, curY);
+            curY -= 45;
+          }
+
+          // Spot name
+          ctx.font = 'bold 48px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillStyle = '#f0f4ff';
+          ctx.fillText(sessionData.spotName, cx, curY);
+          curY -= 55;
+
+          // SurfAI logo text
+          ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillStyle = '#00cfff';
+          ctx.fillText('SurfAI', cx, curY);
+
+          return canvas;
+        }
+
+        function downloadShareCard(canvas, sessionData) {
+          canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const safeName = (sessionData.spotName || 'session').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+            a.download = `surfai-${safeName}-${sessionData.date}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 'image/png');
+        }
+
+        async function shareCard(canvas, sessionData) {
+          try {
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const safeName = (sessionData.spotName || 'session').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+            const file = new File([blob], `surfai-${safeName}.png`, { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: `Session surf - ${sessionData.spotName}`,
+                text: `Session a ${sessionData.spotName} via SurfAI`
+              });
+            } else {
+              // Fallback to download
+              downloadShareCard(canvas, sessionData);
+            }
+          } catch (e) {
+            if (e.name !== 'AbortError') {
+              // User didn't cancel, fallback to download
+              downloadShareCard(canvas, sessionData);
+            }
+          }
+        }
+
+        // PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+
+    </script>
+</body>
+</html>
