@@ -1465,109 +1465,239 @@ select option { background: #0d2137; color: #f0f4ff; }
 
         // Cache des scores IA par spotId
         let _spotScoresCache = {};
+        let _userLat = null;
+        let _userLng = null;
+        let _spotsPage = 0;
+        let _spotsFilters = {};
+        let _spotsSort = 'az';
+        let _spotsLoaded = [];
+        let _spotsSearchTimeout = null;
+        const SPOTS_PAGE_SIZE = 30;
 
         async function loadSpotsTab() {
-          const userId = dataManager.currentUserId;
-          prefetchSpotScores(userId);
-          await loadFavoriteSpots();
-          await renderAllSpots();
-          populateSpotsFilters();
+            _spotsPage = 0;
+            _spotsFilters = {};
+            _spotsSort = 'az';
+            _spotsLoaded = [];
+
+            const userId = dataManager.currentUserId;
+            prefetchSpotScores(userId);
+
+            // Request geolocation for distance sorting
+            if (_userLat == null && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => { _userLat = pos.coords.latitude; _userLng = pos.coords.longitude; },
+                    () => { /* silent */ }
+                );
+            }
+
+            await renderFavStrip();
+            await loadSpotsFilters();
+            await loadAndRenderSpots();
+
+            // Search avec debounce
+            const searchEl = document.getElementById('spots-search');
+            if (searchEl) {
+                searchEl.value = '';
+                searchEl.oninput = () => {
+                    clearTimeout(_spotsSearchTimeout);
+                    _spotsSearchTimeout = setTimeout(() => {
+                        _spotsFilters.search = searchEl.value.trim();
+                        _spotsPage = 0;
+                        _spotsLoaded = [];
+                        loadAndRenderSpots();
+                    }, 300);
+                };
+            }
         }
 
-        async function populateSpotsFilters() {
-          const spots = await dataManager.getSpots();
-          const countries = Object.keys(spots);
-          const countrySelect = document.getElementById('spots-country');
-          if (countrySelect && countrySelect.options.length <= 1) {
-            countries.forEach(c => {
-              const opt = document.createElement('option');
-              opt.value = c; opt.textContent = c;
-              countrySelect.appendChild(opt);
-            });
-          }
+        async function loadAndRenderSpots() {
+            const list = document.getElementById('spots-list');
+            const btn = document.getElementById('spots-load-more');
+            if (!list) return;
+
+            if (_spotsPage === 0) list.innerHTML = '<div class="empty">Chargement...</div>';
+
+            let query = supabaseClient
+                .from('spots')
+                .select('id, name, city, region, country, lat, lng, wave_type, difficulty')
+                .range(_spotsPage * SPOTS_PAGE_SIZE, (_spotsPage + 1) * SPOTS_PAGE_SIZE - 1)
+                .order('name');
+
+            if (_spotsFilters.country) query = query.eq('country', _spotsFilters.country);
+            if (_spotsFilters.region) query = query.eq('region', _spotsFilters.region);
+            if (_spotsFilters.search && _spotsFilters.search.length >= 2) {
+                const s = _spotsFilters.search.replace(/[.,()]/g, '');
+                query = query.or(`name.ilike.%${s}%,city.ilike.%${s}%,region.ilike.%${s}%,country.ilike.%${s}%`);
+            }
+
+            const { data, error } = await query;
+            const spots = data || [];
+
+            if (_spotsPage === 0) {
+                _spotsLoaded = spots;
+                list.innerHTML = '';
+            } else {
+                _spotsLoaded.push(...spots);
+            }
+
+            // Sort client-side si distance
+            let sorted = [..._spotsLoaded];
+            if (_spotsSort === 'distance' && _userLat != null) {
+                sorted.sort((a, b) => {
+                    const da = haversineKm(a.lat, a.lng, _userLat, _userLng);
+                    const db = haversineKm(b.lat, b.lng, _userLat, _userLng);
+                    return da - db;
+                });
+            }
+
+            // Render
+            if (sorted.length === 0) {
+                list.innerHTML = '<div class="empty">Aucun spot trouvé.</div>';
+            } else {
+                list.innerHTML = sorted.map(s => {
+                    const waveType = s.wave_type ? s.wave_type.replace(/_/g, ' ') : '';
+                    const loc = [s.city, s.country].filter(Boolean).join(' · ');
+                    const meta = [loc, waveType].filter(Boolean).join(' · ');
+                    return `<div class="spot-row" onclick="showSpotDetail('${s.id}')">
+                        <div class="spot-row-info">
+                            <div class="spot-row-name">${s.name}</div>
+                            <div class="spot-row-meta">${meta}</div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Voir plus
+            if (btn) {
+                btn.style.display = spots.length < SPOTS_PAGE_SIZE ? 'none' : 'block';
+                btn.disabled = false;
+                btn.textContent = 'Voir plus';
+            }
+        }
+
+        function loadMoreSpots() {
+            const btn = document.getElementById('spots-load-more');
+            if (btn) { btn.disabled = true; btn.textContent = 'Chargement...'; }
+            _spotsPage++;
+            loadAndRenderSpots();
+        }
+
+        async function renderFavStrip() {
+            const container = document.getElementById('fav-strip-container');
+            if (!container) return;
+            const userId = dataManager.currentUserId;
+            if (!userId || !supabaseClient) {
+                container.innerHTML = '<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Connectez-vous pour voir vos favoris</div></div>';
+                return;
+            }
+
+            const { data } = await supabaseClient
+                .from('user_favorite_spots')
+                .select('spot_id, spots(id, name, city, lat, lng)')
+                .eq('user_id', userId);
+
+            const favs = (data || []).map(r => r.spots).filter(Boolean);
+
+            if (favs.length === 0) {
+                container.innerHTML = '<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Ajoute des spots en favoris</div></div>';
+                return;
+            }
+
+            const cards = favs.map(s => {
+                const score = _spotScoresCache?.[s.id]?.score;
+                const color = score >= 8 ? '#4dff91' : score >= 6 ? '#00cfff' : score ? '#ed8936' : 'rgba(255,255,255,0.2)';
+                return `<div class="fav-card" onclick="showSpotDetail('${s.id}')" style="border-color:${color}">
+                    ${score ? `<div class="fav-score" style="background:${color}">${score}</div>` : ''}
+                    <div class="fav-name">${s.name}</div>
+                    <div class="fav-city">${s.city || ''}</div>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = `<div class="fav-strip"><div class="fav-strip-label">⭐ Mes spots</div><div class="fav-strip-scroll">${cards}</div></div>`;
+        }
+
+        async function loadSpotsFilters() {
+            const countrySelect = document.getElementById('spots-country');
+            if (!countrySelect) return;
+            const { data } = await supabaseClient
+                .from('spots')
+                .select('country')
+                .not('country', 'is', null)
+                .order('country');
+            const countries = [...new Set((data || []).map(s => s.country))];
+            countrySelect.innerHTML = '<option value="">Tous les pays</option>' +
+                countries.map(c => `<option value="${c}">${c}</option>`).join('');
         }
 
         async function onSpotsCountryChange() {
-          const country = document.getElementById('spots-country').value;
-          const regionSel = document.getElementById('spots-region');
-          const citySel = document.getElementById('spots-city');
-          citySel.innerHTML = '<option value="">Ville</option>';
-          if (country) {
-            const spots = await dataManager.getSpots();
-            const regionHtml = Object.keys(spots[country] || {})
-              .map(r => `<option value="${r}">${r}</option>`)
-              .join('');
-            regionSel.innerHTML = '<option value="">Région</option>' + regionHtml;
-          } else {
-            regionSel.innerHTML = '<option value="">Région</option>';
-          }
-          await filterSpots();
+            const country = document.getElementById('spots-country')?.value || '';
+            const regionSelect = document.getElementById('spots-region');
+            _spotsFilters.country = country || undefined;
+            _spotsFilters.region = undefined;
+
+            if (country && regionSelect) {
+                const { data } = await supabaseClient
+                    .from('spots')
+                    .select('region')
+                    .eq('country', country)
+                    .not('region', 'is', null)
+                    .order('region');
+                const regions = [...new Set((data || []).map(s => s.region))];
+                regionSelect.innerHTML = '<option value="">Toutes les régions</option>' +
+                    regions.map(r => `<option value="${r}">${r}</option>`).join('');
+            }
+
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
         }
 
-        async function onSpotsRegionChange() {
-          const country = document.getElementById('spots-country').value;
-          const region  = document.getElementById('spots-region').value;
-          const citySel = document.getElementById('spots-city');
-          if (country && region) {
-            const spots = await dataManager.getSpots();
-            const cityHtml = Object.keys(spots[country]?.[region] || {})
-              .map(c => `<option value="${c}">${c}</option>`)
-              .join('');
-            citySel.innerHTML = '<option value="">Ville</option>' + cityHtml;
-          }
-          await filterSpots();
+        function onSpotsRegionChange() {
+            _spotsFilters.region = document.getElementById('spots-region')?.value || undefined;
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
         }
 
-        async function loadFavoriteSpots() {
-  const container = document.getElementById('fav-spots-list');
-  if (!container) return;
-  const userId = dataManager.currentUserId;
-  if (!userId || !supabaseClient) {
-    container.innerHTML = '<div class="empty">Connectez-vous pour voir vos favoris.</div>';
-    return;
-  }
-  try {
-    const { data: favRows, error } = await dataManager.supabase
-      .from('user_favorite_spots')
-      .select('spot_id')
-      .eq('user_id', userId);
-    if (error) throw error;
-    if (!favRows || !favRows.length) {
-      container.innerHTML = '<div class="empty">Aucun favori. Explorez l\'annuaire !</div>';
-      return;
-    }
-    const favIds = new Set(favRows.map(r => r.spot_id));
-    const allSpots = await dataManager.getSpots();
-    const spots = [];
-    Object.values(allSpots).forEach(regions =>
-      Object.values(regions).forEach(cities =>
-        Object.entries(cities).forEach(([cityName, ss]) =>
-          ss.forEach(s => { if (favIds.has(s.id)) spots.push({ ...s, city: cityName }); })
-        )
-      )
-    );
-    if (!spots.length) {
-      container.innerHTML = '<div class="empty">Aucun favori. Explorez l\'annuaire !</div>';
-      return;
-    }
-    container.innerHTML = spots.map(s => {
-      const scoreInfo = _spotScoresCache[s.id];
-      const scoreBadge = scoreInfo
-        ? `<span class="spot-score" style="color:${scoreInfo.score >= 8 ? '#4dff91' : scoreInfo.score >= 6 ? '#00cfff' : '#ed8936'}">${scoreInfo.score} demain</span>`
-        : '';
-      return `
-        <div class="spot-row" onclick="showSpotDetail('${s.id}', '${(s.name || '').replace(/'/g,"\\'")}', ${s.lat || 0}, ${s.lng || 0})">
-          <div>
-            <div class="spot-name">⭐ ${s.name}</div>
-            <div class="spot-city">${s.city || ''}</div>
-          </div>
-          ${scoreBadge}<span style="color:rgba(255,255,255,0.3);font-size:1.1rem">›</span>
-        </div>`;
-    }).join('');
-  } catch (e) {
-    container.innerHTML = '<div class="empty">Erreur chargement favoris.</div>';
-  }
-}
+        function renderActiveFilters() {
+            const el = document.getElementById('active-filters');
+            if (!el) return;
+            const chips = [];
+            if (_spotsFilters.country) chips.push(`<span class="active-filter" onclick="clearFilter('country')">✕ ${_spotsFilters.country}</span>`);
+            if (_spotsFilters.region) chips.push(`<span class="active-filter" onclick="clearFilter('region')">✕ ${_spotsFilters.region}</span>`);
+            el.innerHTML = chips.join('');
+        }
+
+        function clearFilter(key) {
+            delete _spotsFilters[key];
+            if (key === 'country') { delete _spotsFilters.region; document.getElementById('spots-country').value = ''; }
+            if (key === 'region') document.getElementById('spots-region').value = '';
+            renderActiveFilters();
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function setSpotsSort(sort) {
+            _spotsSort = sort;
+            document.querySelectorAll('.sort-chip').forEach(c => c.classList.toggle('active', c.dataset.sort === sort));
+            if (sort === 'filter') { toggleFilterPanel(); return; }
+            _spotsPage = 0; _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function toggleFilterPanel() {
+            document.getElementById('filter-panel')?.classList.toggle('open');
+        }
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const toRad = d => d * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLng = toRad(lng2 - lng1);
+            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
 
         async function prefetchSpotScores(userId) {
           if (!userId) return;
@@ -1590,164 +1720,145 @@ select option { background: #0d2137; color: #f0f4ff; }
           } catch (e) { /* silencieux */ }
         }
 
-        async function renderAllSpots(filter) {
-          filter = filter || {};
-          const container = document.getElementById('all-spots-list');
-          if (!container) return;
-          container.innerHTML = '<div class="loading">Chargement...</div>';
-          try {
-            const allSpots = await dataManager.getSpots();
-            let flatSpots = [];
-            Object.entries(allSpots).forEach(([country, regions]) => {
-              Object.entries(regions).forEach(([region, cities]) => {
-                Object.entries(cities).forEach(([city, spots]) => {
-                  spots.forEach(s => flatSpots.push({ ...s, country, region, city }));
-                });
-              });
-            });
-            if (filter.country) flatSpots = flatSpots.filter(s => s.country === filter.country);
-            if (filter.region)  flatSpots = flatSpots.filter(s => s.region  === filter.region);
-            if (filter.city)    flatSpots = flatSpots.filter(s => s.city    === filter.city);
+        async function showSpotDetail(spotId) {
+            const detailEl = document.getElementById('spot-detail');
+            const listView = document.querySelector('.spot-list-view');
+            if (!detailEl || !listView) return;
 
-            if (!flatSpots.length) {
-              container.innerHTML = '<div class="empty">Aucun spot trouvé.</div>';
-              return;
+            listView.classList.add('hidden');
+            detailEl.classList.add('active');
+            detailEl.innerHTML = '<div class="empty">Chargement...</div>';
+
+            // Fetch spot complet
+            const { data: spot, error } = await supabaseClient
+                .from('spots')
+                .select('*')
+                .eq('id', spotId)
+                .single();
+
+            if (!spot) {
+                detailEl.innerHTML = '<div class="empty">Spot introuvable</div>';
+                return;
             }
-            container.innerHTML = flatSpots.slice(0, 40).map(s => {
-              const scoreInfo = _spotScoresCache[s.id];
-              const scoreBadge = scoreInfo
-                ? `<span class="spot-score" style="color:${scoreInfo.score >= 8 ? '#4dff91' : scoreInfo.score >= 6 ? '#00cfff' : '#ed8936'}">${scoreInfo.score} demain</span>`
-                : '';
-              return `
-              <div class="spot-row" onclick="showSpotDetail('${s.id}', '${(s.name || '').replace(/'/g,"\\'")}', ${s.lat || 0}, ${s.lng || 0})">
-                <div>
-                  <div class="spot-name">${s.name}</div>
-                  <div class="spot-city">${s.city}, ${s.country}</div>
-                </div>
-                ${scoreBadge}<span style="color:rgba(255,255,255,0.3);font-size:1.1rem">›</span>
-              </div>`;
-            }).join('');
-          } catch (e) {
-            container.innerHTML = '<div class="empty">Erreur chargement spots.</div>';
-          }
-        }
 
-        async function filterSpots() {
-          const country = document.getElementById('spots-country')?.value;
-          const region  = document.getElementById('spots-region')?.value;
-          const city    = document.getElementById('spots-city')?.value;
-          renderAllSpots({ country, region, city });
-        }
+            const userId = dataManager.currentUserId;
+            const score = _spotScoresCache?.[spotId]?.score;
+            const scoreColor = score >= 8 ? '#4dff91' : score >= 6 ? '#00cfff' : score ? '#ed8936' : 'rgba(255,255,255,0.3)';
 
-        async function showSpotDetail(spotId, spotName, lat, lng) {
-          document.getElementById('spots-list-view').classList.add('hidden');
-          document.getElementById('spot-detail-view').classList.add('active');
-
-          const container = document.getElementById('spot-detail-content');
-          container.innerHTML = '<div class="loading">Chargement fiche spot...</div>';
-
-          const userId = dataManager.currentUserId;
-
-          try {
-            // Prévisions 5 jours
-            let windowsHtml = '<div class="empty">Prévisions indisponibles.</div>';
+            // Check if favorited
+            let isFav = false;
             if (userId && supabaseClient) {
-              const res = await fetch(`${backendUrl}/api/v1/predictions/spot/${spotId}?userId=${userId}&days=5`);
-              const data = await res.json();
-              if (data.success && data.windows?.length) {
-                windowsHtml = data.windows.slice(0, 8).map(w => {
-                  const scoreCls = w.score >= 8 ? 'score-green' : w.score >= 6 ? 'score-blue' : 'score-orange';
-                  const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-                  return `
-                    <div class="window-row">
-                      <div class="score-badge ${scoreCls}">${w.score}</div>
-                      <div class="window-info">
-                        <div class="window-title">${date} · ${w.timeWindow}</div>
-                        <div class="window-meta">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h</div>
-                        <div class="window-narrative">${w.narrative || ''}</div>
-                      </div>
+                const { data: favData } = await supabaseClient
+                    .from('user_favorite_spots')
+                    .select('spot_id')
+                    .eq('user_id', userId)
+                    .eq('spot_id', spotId);
+                isFav = favData?.length > 0;
+            }
+
+            // Difficulty mapping
+            const diffMap = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé', expert: 'Expert' };
+            const tideMap = { low: 'Basse', mid: 'Mi-marée', high: 'Haute' };
+
+            // Build characteristics cards
+            let charsHtml = '';
+            const chars = [];
+
+            if (spot.wave_type || spot.bottom_type) {
+                const val = (spot.wave_type || spot.bottom_type || '').replace(/_/g, ' ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Type de vague</div><div class="spot-char-value">🏖️ ${val.charAt(0).toUpperCase() + val.slice(1)}</div></div>`);
+            }
+            if (spot.difficulty?.length) {
+                const levels = spot.difficulty.map(d => diffMap[d] || d).join(' · ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Niveau</div><div class="spot-char-value">🔥 ${levels}</div></div>`);
+            }
+            if (spot.ideal_tide?.length) {
+                const tides = spot.ideal_tide.map(t => tideMap[t] || t).join(' · ');
+                chars.push(`<div class="spot-char"><div class="spot-char-label">Marée idéale</div><div class="spot-char-value">🌙 ${tides}</div></div>`);
+            }
+            if (chars.length > 0) {
+                charsHtml = `<div class="spot-chars">${chars.join('')}</div>`;
+            }
+
+            // Wind box
+            let windHtml = '';
+            if (spot.ideal_wind?.length) {
+                windHtml = `<div class="spot-wind-box">
+                    <div style="font-size:1.5rem">💨</div>
+                    <div>
+                        <div style="color:#00cfff;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px">Vent idéal</div>
+                        <div style="color:#f0f4ff;font-size:0.85rem;font-weight:600">${spot.ideal_wind.join(', ')} (offshore)</div>
+                    </div>
+                </div>`;
+            }
+
+            // Google Maps
+            const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
+
+            // Location string
+            const loc = [spot.city, spot.region, spot.country].filter(Boolean).join(', ');
+
+            // Predictions (existing backend call)
+            let predsHtml = '<div class="empty">Prévisions indisponibles.</div>';
+            if (userId) {
+                try {
+                    const res = await fetch(`${backendUrl}/api/v1/predictions/spot/${spotId}?userId=${userId}&days=5`);
+                    const pData = await res.json();
+                    if (pData.success && pData.windows?.length) {
+                        predsHtml = pData.windows.slice(0, 8).map(w => {
+                            const wColor = w.score >= 8 ? '#4dff91' : w.score >= 6 ? '#00cfff' : '#ed8936';
+                            const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                            return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+                                <div style="background:${wColor};color:#0a0e27;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem;flex-shrink:0">${w.score}</div>
+                                <div style="flex:1">
+                                    <div style="color:#f0f4ff;font-size:0.75rem;font-weight:600">${date} · ${w.startTime || ''}–${w.endTime || ''}</div>
+                                    <div style="color:rgba(255,255,255,0.35);font-size:0.65rem">${w.narrative || ''}</div>
+                                </div>
+                            </div>`;
+                        }).join('');
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            // User sessions on this spot
+            const userSessions = (userData.sessions || []).filter(s => s.spot_id === spotId).slice(0, 5);
+            let sessHtml = '<div style="color:rgba(255,255,255,0.3);font-size:0.75rem;padding:8px 0">Aucune session ici</div>';
+            if (userSessions.length > 0) {
+                sessHtml = userSessions.map(s => {
+                    const date = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                    return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+                        <span style="color:#f0f4ff;font-size:0.75rem">${date}</span>
+                        <span style="color:#f0f4ff;font-size:0.75rem">${'⭐'.repeat(s.rating || 0)}</span>
                     </div>`;
                 }).join('');
-              }
             }
 
-            // Sessions passées sur ce spot
-            let sessionsHtml = '<div class="empty">Aucune session ici.</div>';
-            const spotSessions = (userData.sessions || []).filter(s => s.spot_id === spotId).slice(0, 5);
-            if (spotSessions.length) {
-              sessionsHtml = spotSessions.map(s => {
-                const date = new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-                const stars = '★'.repeat(s.rating || 0);
-                return `<div class="session-compact"><span>${date}</span><span style="color:#4dff91">${stars}</span></div>`;
-              }).join('');
-            }
-
-            // Conditions idéales (depuis données spot si disponibles)
-            let conditionsHtml = '';
-            try {
-              const allSpots = await dataManager.getSpots();
-              let spotData = null;
-              Object.values(allSpots).forEach(regions => {
-                Object.values(regions).forEach(cities => {
-                  Object.values(cities).forEach(spots => {
-                    const found = spots.find(s => s.id === spotId);
-                    if (found) spotData = found;
-                  });
-                });
-              });
-              if (spotData && (spotData.ideal_wind_direction || spotData.ideal_swell_min || spotData.ideal_tide)) {
-                const windLabel  = spotData.ideal_wind_direction ? '💨 ' + spotData.ideal_wind_direction : '';
-                const swellLabel = (spotData.ideal_swell_min || spotData.ideal_swell_max)
-                  ? '🌊 ' + (spotData.ideal_swell_min || '?') + '–' + (spotData.ideal_swell_max || '?') + 'm' : '';
-                const tideLabel  = spotData.ideal_tide ? '🌙 Marée ' + spotData.ideal_tide : '';
-                const items = [windLabel, swellLabel, tideLabel].filter(Boolean);
-                if (items.length) {
-                  conditionsHtml = `
-                    <div class="card">
-                      <span class="section-label">✅ Conditions idéales</span>
-                      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-                        ${items.map(i => `<span style="background:rgba(77,255,145,0.1);border:1px solid rgba(77,255,145,0.2);border-radius:6px;padding:4px 10px;font-size:0.78rem;color:#4dff91">${i}</span>`).join('')}
-                      </div>
-                    </div>`;
-                }
-              }
-            } catch (e) { /* silencieux */ }
-
-            // Vérifier si spot favori
-            const favContainer = document.getElementById('fav-spots-list');
-            const isFav = favContainer && favContainer.innerHTML.includes(spotId);
-
-            container.innerHTML = `
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-                <div>
-                  <h2 style="font-size:1.1rem;color:#f0f4ff">${spotName}</h2>
-                </div>
-                <button id="fav-toggle-btn" class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${spotId}', this)">
-                  ${isFav ? '⭐ Favori' : '☆ Favori'}
-                </button>
-              </div>
-
-              ${conditionsHtml}
-
-              <div class="card">
-                <span class="section-label">🎯 Prévisions 5 jours</span>
-                ${windowsHtml}
-              </div>
-
-              <div class="card">
-                <span class="section-label">📋 Mes sessions ici</span>
-                ${sessionsHtml}
-              </div>`;
-
-          } catch (e) {
-            container.innerHTML = '<div class="empty">Erreur : ' + e.message + '</div>';
-          }
+            detailEl.innerHTML = `
+                <div style="padding:12px">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+                        <div>
+                            <div onclick="backToSpotsList()" style="color:rgba(255,255,255,0.4);font-size:0.75rem;cursor:pointer;margin-bottom:8px">← Spots</div>
+                            <div style="color:#f0f4ff;font-size:1.1rem;font-weight:700">${spot.name}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-top:2px">${loc}</div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            ${score ? `<div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem">${score}</div>` : ''}
+                            <button onclick="toggleFavorite('${spotId}', this)" style="background:${isFav ? 'rgba(77,255,145,0.15)' : 'rgba(255,255,255,0.05)'};border:1px solid ${isFav ? '#4dff91' : 'rgba(255,255,255,0.15)'};border-radius:8px;padding:4px 10px;color:${isFav ? '#4dff91' : 'rgba(255,255,255,0.4)'};font-size:0.75rem;cursor:pointer" class="${isFav ? 'active' : ''}">${isFav ? '⭐ Favori' : '☆ Favori'}</button>
+                        </div>
+                    </div>
+                    ${charsHtml}
+                    ${windHtml}
+                    <a href="${gmapsUrl}" target="_blank" rel="noopener" class="gmaps-btn">📍 S'y rendre (Google Maps)</a>
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">📅 Prévisions 5 jours</div>
+                    ${predsHtml}
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">🏄 Mes sessions ici</div>
+                    ${sessHtml}
+                </div>`;
         }
 
         function backToSpotsList() {
-          document.getElementById('spots-list-view').classList.remove('hidden');
-          document.getElementById('spot-detail-view').classList.remove('active');
-          loadFavoriteSpots();
+            document.querySelector('.spot-list-view')?.classList.remove('hidden');
+            document.getElementById('spot-detail')?.classList.remove('active');
         }
 
         async function toggleFavorite(spotId, btn) {
