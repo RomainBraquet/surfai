@@ -1355,6 +1355,13 @@ select option { background: #0d2137; color: #f0f4ff; }
                 if (savedProfile) {
                     try { userData.profile = JSON.parse(savedProfile); } catch (e) {}
                 }
+                // Tenter aussi depuis Supabase (peut échouer avec bypass dev à cause du RLS)
+                if (!userData.profile?.nickname && dataManager.currentUserId && supabaseClient) {
+                    try {
+                        const { data: p } = await supabaseClient.from('profiles').select('*').eq('id', dataManager.currentUserId).single();
+                        if (p) { userData.profile = p; localStorage.setItem('surfai_profile', JSON.stringify(p)); }
+                    } catch(e) { /* RLS may block — ignore */ }
+                }
 
                 // Charger spots hiérarchiques
                 await loadSpotsHierarchy();
@@ -1508,20 +1515,44 @@ select option { background: #0d2137; color: #f0f4ff; }
               return;
             }
 
-            container.innerHTML = top3.map(w => {
-              const scoreCls = w.score >= 8 ? 'score-green' : w.score >= 6 ? 'score-blue' : 'score-orange';
+            // 1er créneau = bloc principal, 2 suivants = côte à côte
+            function renderWindow(w, isBig) {
+              const scoreColor = w.score >= 8 ? '#4dff91' : w.score >= 6 ? '#00cfff' : '#ed8936';
               const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-              const board = w.boardSuggestion?.board?.name ? '· 🏄 ' + w.boardSuggestion.board.name : '';
-              return `
-                <div class="window-row">
-                  <div class="score-badge ${scoreCls}">${w.score}</div>
-                  <div class="window-info">
-                    <div class="window-title">${date} · ${w.timeWindow} · ${w.spotName}</div>
-                    <div class="window-meta">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h ${w.conditions?.windDirection || ''} ${board}</div>
-                    <div class="window-narrative">${w.narrative || ''}</div>
+              const board = w.boardSuggestion?.board?.name ? '🏄 ' + w.boardSuggestion.board.name : '';
+              if (isBig) {
+                return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:10px">
+                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                    <div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;flex-shrink:0">${w.score}</div>
+                    <div>
+                      <div style="color:#f0f4ff;font-size:1rem;font-weight:600">${w.spotName}</div>
+                      <div style="color:rgba(255,255,255,0.5);font-size:0.85rem">${date} · ${w.timeWindow || ''}</div>
+                    </div>
                   </div>
+                  <div style="color:rgba(255,255,255,0.5);font-size:0.8rem">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h ${w.conditions?.windDirection || ''} ${board}</div>
+                  ${w.narrative ? '<div style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-top:6px;font-style:italic">' + w.narrative + '</div>' : ''}
                 </div>`;
-            }).join('');
+              }
+              return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">${w.score}</div>
+                  <div style="min-width:0">
+                    <div style="color:#f0f4ff;font-size:0.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.spotName}</div>
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">${date} · ${w.timeWindow || ''}</div>
+                  </div>
+                </div>
+                <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h</div>
+              </div>`;
+            }
+
+            let html = renderWindow(top3[0], true);
+            if (top3.length > 1) {
+              html += '<div style="display:flex;gap:8px">';
+              if (top3[1]) html += renderWindow(top3[1], false);
+              if (top3[2]) html += renderWindow(top3[2], false);
+              html += '</div>';
+            }
+            container.innerHTML = html;
 
           } catch (e) {
             const container2 = document.getElementById('accueil-windows');
@@ -1615,14 +1646,19 @@ select option { background: #0d2137; color: #f0f4ff; }
                 _spotsLoaded.push(...spots);
             }
 
-            // Sort client-side si distance
+            // Sort/filter client-side si distance — max 10km
             let sorted = [..._spotsLoaded];
             if (_spotsSort === 'distance' && _userLat != null) {
-                sorted.sort((a, b) => {
-                    const da = haversineKm(a.lat, a.lng, _userLat, _userLng);
-                    const db = haversineKm(b.lat, b.lng, _userLat, _userLng);
-                    return da - db;
-                });
+                sorted = sorted
+                    .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
+                    .filter(s => s._dist <= 10)
+                    .sort((a, b) => a._dist - b._dist);
+                if (sorted.length === 0) {
+                    sorted = [..._spotsLoaded]
+                        .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
+                        .sort((a, b) => a._dist - b._dist)
+                        .slice(0, 10);
+                }
             }
 
             // Render
@@ -1631,8 +1667,9 @@ select option { background: #0d2137; color: #f0f4ff; }
             } else {
                 list.innerHTML = sorted.map(s => {
                     const waveType = s.wave_type ? s.wave_type.replace(/_/g, ' ') : '';
+                    const distTxt = s._dist != null ? `${s._dist.toFixed(1)}km` : '';
                     const loc = [s.city, s.surf_zone || s.region, s.country].filter(Boolean).join(' · ');
-                    const meta = [loc, waveType].filter(Boolean).join(' · ');
+                    const meta = [distTxt, loc, waveType].filter(Boolean).join(' · ');
                     return `<div class="spot-row" onclick="showSpotDetail('${s.id}')">
                         <div class="spot-row-info">
                             <div class="spot-row-name">${s.name}</div>
@@ -2152,21 +2189,11 @@ select option { background: #0d2137; color: #f0f4ff; }
             if (!result.success) throw new Error(result.error || 'Erreur serveur');
 
             // Capture spot name/city BEFORE form reset
-            const spotSelect = document.getElementById('session-spot');
-            const capturedSpotName = spotSelect.options[spotSelect.selectedIndex]?.text || '';
-            // Try to extract city from cached spot data
+            const capturedSpotName = document.getElementById('session-spot-search')?.value || '';
             let capturedSpotCity = '';
             try {
-              const allSpots = await dataManager.getSpots();
-              Object.values(allSpots).forEach(regions => {
-                Object.values(regions).forEach(cities => {
-                  Object.values(cities).forEach(spots => {
-                    spots.forEach(s => {
-                      if (s.id === spotId) capturedSpotCity = s.city || s.commune || '';
-                    });
-                  });
-                });
-              });
+              const { data: spotData } = await supabaseClient.from('spots').select('city').eq('id', spotId).single();
+              capturedSpotCity = spotData?.city || '';
             } catch(e) { /* ignore */ }
 
             // Build share data before reset
@@ -2181,6 +2208,7 @@ select option { background: #0d2137; color: #f0f4ff; }
 
             // Reset form
             document.getElementById('session-spot').value = '';
+            document.getElementById('session-spot-search').value = '';
             document.querySelectorAll('input[name="rating"]').forEach(r => r.checked = false);
             document.getElementById('session-notes').value = '';
             document.getElementById('session-board').value = '';
