@@ -515,21 +515,31 @@ select option { background: #0d2137; color: #f0f4ff; }
     <!-- ===== SPOTS ===== -->
     <div id="tab-spots" class="tab-panel">
       <div class="spot-list-view" id="spots-list-view">
-        <div id="fav-strip-container"></div>
-        <input type="text" class="spots-search" id="spots-search" placeholder="🔍 Rechercher un spot...">
-        <div class="sort-chips">
-            <div class="sort-chip" data-sort="filter" onclick="toggleFilterPanel()">🔽 Filtrer</div>
-            <div class="sort-chip" data-sort="distance" onclick="setSpotsSort('distance')">📍 Géoloc</div>
-            <div class="sort-chip active" data-sort="az" onclick="setSpotsSort('az')">A→Z</div>
+        <!-- Favoris toujours visibles -->
+        <div id="spots-favs-section"></div>
+
+        <!-- Tabs Autour de moi / Explorer -->
+        <div style="display:flex;gap:0;margin-bottom:12px">
+          <div id="spots-tab-nearby" class="spots-tab active" onclick="switchSpotsTab('nearby')"
+               style="flex:1;padding:10px;text-align:center;font-size:0.85rem;font-weight:600;cursor:pointer;border-bottom:2px solid #4dff91;color:#4dff91">Autour de moi</div>
+          <div id="spots-tab-explore" class="spots-tab" onclick="switchSpotsTab('explore')"
+               style="flex:1;padding:10px;text-align:center;font-size:0.85rem;cursor:pointer;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4)">Explorer</div>
         </div>
-        <div id="active-filters" class="active-filters"></div>
-        <div id="filter-panel" class="filter-panel">
-            <select id="spots-country" onchange="onSpotsCountryChange()"><option value="">Pays</option></select>
+
+        <!-- Contenu Autour de moi -->
+        <div id="spots-nearby-content">
+          <div id="spots-nearby-list"></div>
         </div>
-        <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:8px;padding-bottom:4px"></div>
-        <div id="city-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:4px"></div>
-        <div id="spots-list"></div>
-        <button id="spots-load-more" class="spots-load-more" onclick="loadMoreSpots()">Voir plus</button>
+
+        <!-- Contenu Explorer -->
+        <div id="spots-explore-content" style="display:none">
+          <input type="text" class="spots-search" id="spots-search" placeholder="🔍 Rechercher un spot...">
+          <div id="spots-explore-countries"></div>
+          <div id="surf-zone-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:8px;padding-bottom:4px"></div>
+          <div id="city-chips" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px;padding-bottom:4px"></div>
+          <div id="spots-list"></div>
+          <button id="spots-load-more" class="spots-load-more" onclick="loadMoreSpots()" style="display:none">Voir plus</button>
+        </div>
       </div>
       <div class="spot-detail" id="spot-detail"></div>
     </div>
@@ -1609,44 +1619,308 @@ select option { background: #0d2137; color: #f0f4ff; }
         let _spotsSearchTimeout = null;
         const SPOTS_PAGE_SIZE = 30;
 
+        let _spotsCurrentTab = 'nearby';
+
         async function loadSpotsTab() {
             _spotsPage = 0;
             _spotsFilters = {};
-            _spotsSort = 'az';
             _spotsLoaded = [];
 
             const userId = dataManager.currentUserId;
             prefetchSpotScores(userId);
 
-            // Request geolocation for distance sorting
-            if (_userLat == null && navigator.geolocation) {
+            // Charger et afficher les favoris
+            await renderSpotsFavs();
+
+            // Afficher le tab par défaut
+            switchSpotsTab(_spotsCurrentTab);
+        }
+
+        function switchSpotsTab(tab) {
+            _spotsCurrentTab = tab;
+            const nearbyTab = document.getElementById('spots-tab-nearby');
+            const exploreTab = document.getElementById('spots-tab-explore');
+            const nearbyContent = document.getElementById('spots-nearby-content');
+            const exploreContent = document.getElementById('spots-explore-content');
+
+            if (tab === 'nearby') {
+                nearbyTab.style.borderBottomColor = '#4dff91';
+                nearbyTab.style.color = '#4dff91';
+                exploreTab.style.borderBottomColor = 'transparent';
+                exploreTab.style.color = 'rgba(255,255,255,0.4)';
+                nearbyContent.style.display = 'block';
+                exploreContent.style.display = 'none';
+                loadNearbySpots();
+            } else {
+                nearbyTab.style.borderBottomColor = 'transparent';
+                nearbyTab.style.color = 'rgba(255,255,255,0.4)';
+                exploreTab.style.borderBottomColor = '#4dff91';
+                exploreTab.style.color = '#4dff91';
+                nearbyContent.style.display = 'none';
+                exploreContent.style.display = 'block';
+                loadExploreView();
+            }
+        }
+
+        async function renderSpotsFavs() {
+            const container = document.getElementById('spots-favs-section');
+            if (!container) return;
+            const userId = dataManager.currentUserId;
+            if (!userId) { container.innerHTML = ''; return; }
+
+            try {
+                const res = await fetch(`${backendUrl}/api/v1/favorites?userId=${userId}`);
+                const fData = await res.json();
+                const favs = fData.favorites || [];
+                if (!favs.length) { container.innerHTML = ''; return; }
+
+                // TODO: remplacer par de vraies données Open-Meteo
+                const fakeConditions = [
+                    { wave: 1.2, wind: 12, dir: 'NE', period: 11 },
+                    { wave: 1.5, wind: 8, dir: 'SE', period: 13 },
+                    { wave: 0.8, wind: 15, dir: 'NO', period: 9 },
+                    { wave: 1.8, wind: 6, dir: 'E', period: 12 },
+                    { wave: 1.0, wind: 20, dir: 'O', period: 10 },
+                ];
+
+                const favsHtml = favs.map((s, i) => {
+                    const cond = fakeConditions[i % fakeConditions.length];
+                    const score = _spotScoresCache?.[s.id]?.score;
+                    const scoreColor = score >= 8 ? '#4dff91' : score >= 6 ? '#00cfff' : score ? '#ed8936' : '';
+                    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
+                        ${score ? `<div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;flex-shrink:0">${score}</div>` : ''}
+                        <div style="flex:1;min-width:0;cursor:pointer" onclick="showSpotDetail('${s.id}')">
+                            <div style="color:#f0f4ff;font-size:0.85rem;font-weight:500">${s.name}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">${s.city || ''} · 🌊 ${cond.wave}m · 💨 ${cond.wind}km/h ${cond.dir} · ${cond.period}s</div>
+                        </div>
+                        <div onclick="toggleFavorite('${s.id}',this);setTimeout(()=>renderSpotsFavs(),500)" class="active"
+                             style="font-size:1.1rem;cursor:pointer;padding:4px 6px;flex-shrink:0">⭐</div>
+                    </div>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <div style="margin-bottom:12px">
+                        <div onclick="toggleSpotsFavs()" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:rgba(77,255,145,0.08);border:1px solid rgba(77,255,145,0.2);border-radius:10px">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span style="font-size:1.1rem">⭐</span>
+                                <span style="color:#4dff91;font-size:0.9rem;font-weight:600">Mes favoris</span>
+                                <span style="background:rgba(77,255,145,0.2);color:#4dff91;border-radius:12px;padding:1px 8px;font-size:0.7rem;font-weight:700">${favs.length}</span>
+                            </div>
+                            <div id="spots-favs-arrow" style="color:#4dff91;font-size:0.8rem;transition:transform 0.2s">▾</div>
+                        </div>
+                        <div id="spots-favs-list" style="display:none">
+                            ${favsHtml}
+                        </div>
+                    </div>`;
+            } catch(e) { container.innerHTML = ''; }
+        }
+
+        function toggleSpotsFavs() {
+            const list = document.getElementById('spots-favs-list');
+            const arrow = document.getElementById('spots-favs-arrow');
+            if (!list) return;
+            const isOpen = list.style.display !== 'none';
+            list.style.display = isOpen ? 'none' : 'block';
+            if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
+        async function loadNearbySpots() {
+            const container = document.getElementById('spots-nearby-list');
+            if (!container) return;
+
+            if (_userLat != null) {
+                // Géoloc active — charger spots < 10km
+                container.innerHTML = '<div class="loading">Recherche des spots proches...</div>';
+                try {
+                    const { data } = await supabaseClient
+                        .from('spots')
+                        .select('id, name, city, region, country, lat, lng, wave_type, surf_zone')
+                        .not('lat', 'is', null)
+                        .limit(200);
+                    const nearby = (data || [])
+                        .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
+                        .filter(s => s._dist <= 10)
+                        .sort((a, b) => a._dist - b._dist);
+
+                    if (nearby.length === 0) {
+                        // Aucun spot à 10km — montrer les 5 plus proches
+                        const closest = (data || [])
+                            .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
+                            .sort((a, b) => a._dist - b._dist)
+                            .slice(0, 5);
+                        container.innerHTML = `
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin-bottom:10px">Aucun spot à moins de 10km. Voici les plus proches :</div>
+                            ${renderSpotRows(closest)}`;
+                    } else {
+                        container.innerHTML = `
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-bottom:8px">${nearby.length} spot${nearby.length > 1 ? 's' : ''} à moins de 10km</div>
+                            ${renderSpotRows(nearby)}`;
+                    }
+                } catch(e) {
+                    container.innerHTML = '<div class="empty">Erreur de chargement.</div>';
+                }
+            } else {
+                // Géoloc pas active — proposer de l'activer
+                container.innerHTML = `
+                    <div style="text-align:center;padding:30px 10px">
+                        <div style="font-size:2rem;margin-bottom:12px">📍</div>
+                        <div style="color:#f0f4ff;font-size:0.9rem;font-weight:600;margin-bottom:8px">Active la géolocalisation</div>
+                        <div style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin-bottom:16px">Pour voir les spots de surf autour de toi</div>
+                        <button onclick="requestGeolocAndReload()" style="padding:10px 24px;background:#4dff91;color:#0a0e27;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer">Activer la géolocalisation</button>
+                    </div>`;
+            }
+        }
+
+        function requestGeolocAndReload() {
+            if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
-                    pos => { _userLat = pos.coords.latitude; _userLng = pos.coords.longitude; },
-                    () => { /* silent */ }
+                    pos => {
+                        _userLat = pos.coords.latitude;
+                        _userLng = pos.coords.longitude;
+                        loadNearbySpots();
+                    },
+                    () => {
+                        document.getElementById('spots-nearby-list').innerHTML = `
+                            <div style="text-align:center;padding:20px;color:rgba(255,255,255,0.4);font-size:0.85rem">
+                                Géolocalisation refusée. Utilise l'onglet Explorer pour trouver tes spots.
+                            </div>`;
+                    }
                 );
             }
+        }
 
-            await renderFavStrip();
-            await loadSpotsFilters();
-            // Afficher le panneau filtre par défaut avec les pays visibles
-            const filterPanel = document.getElementById('filter-panel');
-            if (filterPanel) filterPanel.classList.add('open');
-            await loadAndRenderSpots();
+        function renderSpotRows(spots) {
+            return spots.map(s => {
+                const isFav = _favSpotIds.has(s.id);
+                const distTxt = s._dist != null ? `${s._dist.toFixed(1)}km` : '';
+                const loc = [s.city, s.surf_zone || s.region].filter(Boolean).join(' · ');
+                const meta = [distTxt, loc].filter(Boolean).join(' · ');
+                return `<div class="spot-row">
+                    <div class="spot-row-info" onclick="showSpotDetail('${s.id}')">
+                        <div class="spot-row-name">${s.name}</div>
+                        <div class="spot-row-meta">${meta}</div>
+                    </div>
+                    <div onclick="event.stopPropagation();toggleFavorite('${s.id}',this)"
+                         class="${isFav ? 'active' : ''}"
+                         style="font-size:1.2rem;cursor:pointer;padding:4px 8px;flex-shrink:0">${isFav ? '⭐' : '☆'}</div>
+                </div>`;
+            }).join('');
+        }
 
-            // Search avec debounce
+        async function loadExploreView() {
+            // Charger les pays
+            const countriesDiv = document.getElementById('spots-explore-countries');
+            if (!countriesDiv) return;
+
+            try {
+                const { data } = await supabaseClient.from('spots').select('country').not('country', 'is', null).order('country');
+                const countries = [...new Set((data || []).map(s => s.country))];
+                countriesDiv.innerHTML = `
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                        ${countries.map(c => `
+                            <div onclick="onSpotsCountryChange_explore('${c}')"
+                                 style="padding:8px 16px;border-radius:20px;font-size:0.85rem;cursor:pointer;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">${c}</div>
+                        `).join('')}
+                    </div>`;
+            } catch(e) {}
+
+            // Search
             const searchEl = document.getElementById('spots-search');
             if (searchEl) {
                 searchEl.value = '';
                 searchEl.oninput = () => {
                     clearTimeout(_spotsSearchTimeout);
                     _spotsSearchTimeout = setTimeout(() => {
-                        _spotsFilters.search = searchEl.value.trim();
+                        const q = searchEl.value.trim();
+                        if (q.length < 2) { document.getElementById('spots-list').innerHTML = ''; return; }
+                        _spotsFilters = { search: q };
                         _spotsPage = 0;
                         _spotsLoaded = [];
                         loadAndRenderSpots();
                     }, 300);
                 };
             }
+
+            // Reset la liste
+            document.getElementById('spots-list').innerHTML = '';
+            document.getElementById('spots-load-more').style.display = 'none';
+        }
+
+        async function onSpotsCountryChange_explore(country) {
+            const FRANCE_ZONE_ORDER = ['Pays Basque', 'Landes', 'Gironde', 'Charentes', 'Vendée', 'Bretagne Sud', 'Bretagne Nord', 'Normandie / Manche', 'Nord', 'Méditerranée Ouest', 'Méditerranée Est', 'Corse', 'Réunion'];
+
+            const countriesDiv = document.getElementById('spots-explore-countries');
+            const zoneContainer = document.getElementById('surf-zone-chips');
+            const cityContainer = document.getElementById('city-chips');
+
+            // Charger les zones
+            const { data } = await supabaseClient.from('spots').select('surf_zone').eq('country', country).not('surf_zone', 'is', null);
+            const rawZones = [...new Set((data || []).map(s => s.surf_zone))];
+            const zones = country === 'France'
+                ? FRANCE_ZONE_ORDER.filter(z => rawZones.includes(z)).concat(rawZones.filter(z => !FRANCE_ZONE_ORDER.includes(z)).sort())
+                : rawZones.sort();
+
+            // Mettre le pays en surbrillance
+            countriesDiv.querySelectorAll('div').forEach(d => {
+                d.style.background = d.textContent.trim() === country ? 'rgba(77,255,145,0.15)' : 'rgba(255,255,255,0.06)';
+                d.style.borderColor = d.textContent.trim() === country ? '#4dff91' : 'rgba(255,255,255,0.15)';
+                d.style.color = d.textContent.trim() === country ? '#4dff91' : 'rgba(255,255,255,0.5)';
+            });
+
+            if (zones.length > 1) {
+                zoneContainer.style.display = 'block';
+                zoneContainer.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap">${zones.map(z =>
+                    `<div class="zone-chip" onclick="onZoneClick_explore('${z.replace(/'/g,"\\'")}')">${z}</div>`
+                ).join('')}</div>`;
+            } else {
+                zoneContainer.style.display = 'none';
+            }
+            cityContainer.style.display = 'none';
+            cityContainer.innerHTML = '';
+
+            // Charger les spots du pays
+            _spotsFilters = { country };
+            _spotsPage = 0;
+            _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        async function onZoneClick_explore(zone) {
+            // Highlight la zone
+            document.querySelectorAll('#surf-zone-chips .zone-chip').forEach(c => {
+                c.classList.toggle('active', c.textContent.trim() === zone);
+            });
+
+            const cityContainer = document.getElementById('city-chips');
+
+            // Charger les villes si > 10 spots
+            const { data: zoneSpots } = await supabaseClient.from('spots').select('city').eq('surf_zone', zone).not('city', 'is', null);
+            const cities = [...new Set((zoneSpots || []).map(s => s.city))].sort();
+
+            if (cities.length > 1 && zoneSpots.length > 10) {
+                cityContainer.style.display = 'block';
+                cityContainer.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap">${cities.map(c =>
+                    `<div class="zone-chip" onclick="onCityClick_explore('${c.replace(/'/g,"\\'")}')">${c}</div>`
+                ).join('')}</div>`;
+            } else {
+                cityContainer.style.display = 'none';
+            }
+
+            _spotsFilters = { ..._spotsFilters, surf_zone: zone };
+            delete _spotsFilters.city;
+            _spotsPage = 0;
+            _spotsLoaded = [];
+            loadAndRenderSpots();
+        }
+
+        function onCityClick_explore(city) {
+            document.querySelectorAll('#city-chips .zone-chip').forEach(c => {
+                c.classList.toggle('active', c.textContent.trim() === city);
+            });
+            _spotsFilters.city = city;
+            _spotsPage = 0;
+            _spotsLoaded = [];
+            loadAndRenderSpots();
         }
 
         async function loadAndRenderSpots() {
@@ -1680,41 +1954,11 @@ select option { background: #0d2137; color: #f0f4ff; }
                 _spotsLoaded.push(...spots);
             }
 
-            // Sort/filter client-side si distance — max 10km
-            let sorted = [..._spotsLoaded];
-            if (_spotsSort === 'distance' && _userLat != null) {
-                sorted = sorted
-                    .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
-                    .filter(s => s._dist <= 10)
-                    .sort((a, b) => a._dist - b._dist);
-                if (sorted.length === 0) {
-                    sorted = [..._spotsLoaded]
-                        .map(s => ({ ...s, _dist: haversineKm(s.lat, s.lng, _userLat, _userLng) }))
-                        .sort((a, b) => a._dist - b._dist)
-                        .slice(0, 10);
-                }
-            }
-
             // Render
-            if (sorted.length === 0) {
+            if (_spotsLoaded.length === 0) {
                 list.innerHTML = '<div class="empty">Aucun spot trouvé.</div>';
             } else {
-                list.innerHTML = sorted.map(s => {
-                    const waveType = s.wave_type ? s.wave_type.replace(/_/g, ' ') : '';
-                    const distTxt = s._dist != null ? `${s._dist.toFixed(1)}km` : '';
-                    const loc = [s.city, s.surf_zone || s.region, s.country].filter(Boolean).join(' · ');
-                    const meta = [distTxt, loc, waveType].filter(Boolean).join(' · ');
-                    const isFav = _favSpotIds.has(s.id);
-                    return `<div class="spot-row">
-                        <div class="spot-row-info" onclick="showSpotDetail('${s.id}')">
-                            <div class="spot-row-name">${s.name}</div>
-                            <div class="spot-row-meta">${meta}</div>
-                        </div>
-                        <div onclick="event.stopPropagation();toggleFavorite('${s.id}',this)"
-                             class="${isFav ? 'active' : ''}"
-                             style="font-size:1.2rem;cursor:pointer;padding:4px 8px;flex-shrink:0">${isFav ? '⭐' : '☆'}</div>
-                    </div>`;
-                }).join('');
+                list.innerHTML = renderSpotRows(_spotsLoaded);
             }
 
             // Voir plus
@@ -1732,7 +1976,10 @@ select option { background: #0d2137; color: #f0f4ff; }
             loadAndRenderSpots();
         }
 
-        async function renderFavStrip() {
+        // === Anciennes fonctions spots supprimées (renderFavStrip, loadSpotsFilters, etc.) ===
+        // Remplacées par renderSpotsFavs, loadNearbySpots, loadExploreView
+
+        async function _deprecated_renderFavStrip() {
             const container = document.getElementById('fav-strip-container');
             if (!container) return;
             const userId = dataManager.currentUserId;
