@@ -1,4 +1,1 @@
-{
-  "buildCommand": "cp -r apps/web/* .",
-  "outputDirectory": "."
-}
+{}
