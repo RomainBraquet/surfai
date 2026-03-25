@@ -15,15 +15,11 @@ function scoreLabel(score) {
 // Narrative personnalisée
 function buildNarrative(scoredSlot, spot) {
   const { similarSession, score } = scoredSlot;
-  if (similarSession?.meteo && similarSession?.spots?.name) {
+  // Référencer uniquement les sessions passées sur CE spot
+  if (similarSession?.meteo && similarSession?.spot_id === spot.id) {
     const date = new Date(similarSession.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
     const stars = '★'.repeat(similarSession.rating);
-    const sessionSpotName = similarSession.spots.name;
-    // N'afficher la référence que si c'est le même spot ou un spot proche
-    if (similarSession.spot_id === spot.id) {
-      return `Rappelle ta session du ${date} ici — ${stars}`;
-    }
-    return `Conditions proches de ta session du ${date} à ${sessionSpotName} — ${stars}`;
+    return `Rappelle ta session du ${date} ici — ${stars}`;
   }
   if (score >= 8.5) return 'Conditions exceptionnelles pour ton niveau';
   if (score >= 7)   return 'Excellente session en perspective';
@@ -63,10 +59,14 @@ function getBestWindows(context, maxWindows = 10) {
     return { ...result, time: point.time, conditions: point };
   });
 
-  // Filtrer les créneaux non surfables (score < 4)
-  const surfable = scored.filter(s => s.score >= 4);
+  // Filtrer les créneaux non surfables (score < 4) et nocturnes (avant 6h, après 21h)
+  const surfable = scored.filter(s => {
+    if (s.score < 4) return false;
+    const hour = new Date(s.time).getHours();
+    return hour >= 6 && hour <= 21;
+  });
 
-  // Grouper par demi-journée (matin: 5-12, après-midi: 12-20)
+  // Grouper par demi-journée (matin: 6-12, après-midi: 12-21)
   const groups = {};
   surfable.forEach(s => {
     const date = s.time.split('T')[0];

@@ -412,8 +412,8 @@ select option { background: #0d2137; color: #f0f4ff; }
 
 .spots-search { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #f0f4ff; font-size: 0.9rem; outline: none; margin-bottom: 8px; }
 .spots-search::placeholder { color: rgba(255,255,255,0.3); }
-.sort-chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-.sort-chip { border-radius: 20px; padding: 4px 12px; font-size: 0.7rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+.sort-chips { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.sort-chip { border-radius: 20px; padding: 8px 18px; font-size: 0.85rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
 .sort-chip.active { background: rgba(77,255,145,0.15); border-color: #4dff91; color: #4dff91; }
 .filter-panel { display: none; margin-bottom: 8px; }
 .filter-panel.open { display: flex; gap: 6px; }
@@ -518,9 +518,9 @@ select option { background: #0d2137; color: #f0f4ff; }
         <div id="fav-strip-container"></div>
         <input type="text" class="spots-search" id="spots-search" placeholder="🔍 Rechercher un spot...">
         <div class="sort-chips">
-            <div class="sort-chip active" data-sort="az" onclick="setSpotsSort('az')">A→Z</div>
-            <div class="sort-chip" data-sort="distance" onclick="setSpotsSort('distance')">📍 Distance</div>
             <div class="sort-chip" data-sort="filter" onclick="toggleFilterPanel()">🔽 Filtrer</div>
+            <div class="sort-chip" data-sort="distance" onclick="setSpotsSort('distance')">📍 Géoloc</div>
+            <div class="sort-chip active" data-sort="az" onclick="setSpotsSort('az')">A→Z</div>
         </div>
         <div id="active-filters" class="active-filters"></div>
         <div id="filter-panel" class="filter-panel">
@@ -549,9 +549,10 @@ select option { background: #0d2137; color: #f0f4ff; }
 
           <div class="card">
             <span class="section-label">📍 Spot</span>
-            <select id="session-spot" required>
-              <option value="">Sélectionnez un spot</option>
-            </select>
+            <input type="text" id="session-spot-search" placeholder="Rechercher un spot..." autocomplete="off"
+                   style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;font-size:0.9rem;margin-bottom:4px;outline:none">
+            <input type="hidden" id="session-spot" required>
+            <div id="session-spot-results" style="max-height:200px;overflow-y:auto;display:none"></div>
           </div>
 
           <div class="card">
@@ -1562,6 +1563,9 @@ select option { background: #0d2137; color: #f0f4ff; }
 
             await renderFavStrip();
             await loadSpotsFilters();
+            // Afficher le panneau filtre par défaut avec les pays visibles
+            const filterPanel = document.getElementById('filter-panel');
+            if (filterPanel) filterPanel.classList.add('open');
             await loadAndRenderSpots();
 
             // Search avec debounce
@@ -1712,7 +1716,11 @@ select option { background: #0d2137; color: #f0f4ff; }
                     .select('surf_zone')
                     .eq('country', country)
                     .not('surf_zone', 'is', null);
-                const zones = [...new Set((data || []).map(s => s.surf_zone))].sort();
+                const FRANCE_ZONE_ORDER = ['Pays Basque', 'Landes', 'Gironde', 'Charentes', 'Vendée', 'Bretagne Sud', 'Bretagne Nord', 'Normandie / Manche', 'Nord', 'Méditerranée Ouest', 'Méditerranée Est', 'Corse', 'Réunion'];
+                const rawZones = [...new Set((data || []).map(s => s.surf_zone))];
+                const zones = country === 'France'
+                    ? FRANCE_ZONE_ORDER.filter(z => rawZones.includes(z)).concat(rawZones.filter(z => !FRANCE_ZONE_ORDER.includes(z)).sort())
+                    : rawZones.sort();
                 if (zones.length > 0) {
                     zoneContainer.style.display = 'block';
                     zoneContainer.innerHTML = `<div class="zone-chips">${zones.map(z =>
@@ -1947,7 +1955,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                     const res = await fetch(`${backendUrl}/api/v1/predictions/spot/${spotId}?userId=${userId}&days=5`);
                     const pData = await res.json();
                     if (pData.success && pData.windows?.length) {
-                        predsHtml = pData.windows.slice(0, 8).map(w => {
+                        predsHtml = pData.windows.slice(0, 5).map(w => {
                             const wColor = w.score >= 8 ? '#4dff91' : w.score >= 6 ? '#00cfff' : '#ed8936';
                             const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
                             return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:4px;display:flex;align-items:center;gap:8px">
@@ -2047,57 +2055,67 @@ select option { background: #0d2137; color: #f0f4ff; }
         }
 
         async function populateSessionSpots() {
-          const select = document.getElementById('session-spot');
-          select.innerHTML = '<option value="">Sélectionnez un spot</option>';
-          try {
-            const userId = dataManager.currentUserId;
-            let favSpots = [];
-            if (userId && supabaseClient) {
-              const { data: favRows } = await dataManager.supabase
-                .from('user_favorite_spots')
-                .select('spot_id')
-                .eq('user_id', userId);
-              const favIds = (favRows || []).map(r => r.spot_id);
-                const allSpotsForFav = await dataManager.getSpots();
-              Object.values(allSpotsForFav).forEach(regions =>
-                Object.values(regions).forEach(cities =>
-                  Object.values(cities).forEach(spots =>
-                    spots.forEach(s => { if (favIds.includes(s.id)) favSpots.push(s); })
-                  )
-                )
-              );
-            }
-            if (favSpots.length) {
-              const grpFav = document.createElement('optgroup');
-              grpFav.label = '⭐ Mes favoris';
-              favSpots.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.id; opt.textContent = s.name;
-                grpFav.appendChild(opt);
-              });
-              select.appendChild(grpFav);
-            }
-            const allSpots = await dataManager.getSpots();
-            const grpAll = document.createElement('optgroup');
-            grpAll.label = '🌍 Tous les spots';
-            const favIds = new Set(favSpots.map(s => s.id));
-            Object.values(allSpots).forEach(regions => {
-              Object.values(regions).forEach(cities => {
-                Object.values(cities).forEach(spots => {
-                  spots.forEach(s => {
-                    if (!favIds.has(s.id)) {
-                      const opt = document.createElement('option');
-                      opt.value = s.id; opt.textContent = s.name + (s.city ? ' (' + s.city + ')' : '');
-                      grpAll.appendChild(opt);
-                    }
-                  });
-                });
-              });
-            });
-            select.appendChild(grpAll);
-          } catch (e) {
-            console.error('Erreur chargement spots session:', e);
+          const searchInput = document.getElementById('session-spot-search');
+          const hiddenInput = document.getElementById('session-spot');
+          const resultsDiv = document.getElementById('session-spot-results');
+          if (!searchInput || !resultsDiv) return;
+
+          // Charger les favoris
+          let favSpots = [];
+          const userId = dataManager.currentUserId;
+          if (userId && supabaseClient) {
+              const { data } = await supabaseClient
+                  .from('user_favorite_spots')
+                  .select('spot_id, spots(id, name, city)')
+                  .eq('user_id', userId);
+              favSpots = (data || []).map(r => r.spots).filter(Boolean);
           }
+
+          // Afficher les favoris par défaut
+          renderSpotResults(favSpots, [], resultsDiv, hiddenInput, searchInput);
+          resultsDiv.style.display = 'block';
+
+          let searchTimeout;
+          searchInput.oninput = () => {
+              clearTimeout(searchTimeout);
+              const q = searchInput.value.trim();
+              hiddenInput.value = ''; // reset selection
+              if (q.length < 2) {
+                  renderSpotResults(favSpots, [], resultsDiv, hiddenInput, searchInput);
+                  return;
+              }
+              searchTimeout = setTimeout(async () => {
+                  const s = q.replace(/[.,()]/g, '');
+                  const { data } = await supabaseClient
+                      .from('spots')
+                      .select('id, name, city')
+                      .or(`name.ilike.%${s}%,city.ilike.%${s}%`)
+                      .order('name')
+                      .limit(20);
+                  renderSpotResults(favSpots, data || [], resultsDiv, hiddenInput, searchInput);
+              }, 300);
+          };
+          searchInput.onfocus = () => { resultsDiv.style.display = 'block'; };
+        }
+
+        function renderSpotResults(favs, searched, container, hiddenInput, searchInput) {
+            let html = '';
+            if (favs.length && !searchInput.value.trim()) {
+                html += '<div style="color:#4dff91;font-size:0.7rem;padding:4px 8px;text-transform:uppercase">⭐ Mes favoris</div>';
+                html += favs.map(s => `<div class="spot-result-item" onclick="selectSpotResult('${s.id}','${(s.name||'').replace(/'/g,"\\'")}',this)" style="padding:8px;cursor:pointer;border-radius:6px;color:#f0f4ff;font-size:0.85rem">${s.name} <span style="color:rgba(255,255,255,0.4);font-size:0.75rem">${s.city||''}</span></div>`).join('');
+            }
+            if (searched.length) {
+                html += searched.map(s => `<div class="spot-result-item" onclick="selectSpotResult('${s.id}','${(s.name||'').replace(/'/g,"\\'")}',this)" style="padding:8px;cursor:pointer;border-radius:6px;color:#f0f4ff;font-size:0.85rem">${s.name} <span style="color:rgba(255,255,255,0.4);font-size:0.75rem">${s.city||''}</span></div>`).join('');
+            }
+            if (!html) html = '<div style="color:rgba(255,255,255,0.3);font-size:0.8rem;padding:8px">Tape le nom d\'un spot...</div>';
+            container.innerHTML = html;
+            container.style.display = 'block';
+        }
+
+        function selectSpotResult(id, name, el) {
+            document.getElementById('session-spot').value = id;
+            document.getElementById('session-spot-search').value = name;
+            document.getElementById('session-spot-results').style.display = 'none';
         }
 
         async function submitSession() {
@@ -2194,16 +2212,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           const initials = nickname.substring(0, 1).toUpperCase();
 
           // Charger la liste des spots pour le dropdown "spot de base"
-          let allSpotsList = [];
-          try {
-            const res = await fetch(`${backendUrl}/api/v1/spots`);
-            const data = await res.json();
-            allSpotsList = (data.spots || []).filter(s => s.lat && s.lng);
-          } catch (e) {}
           const savedHomeSpot = JSON.parse(localStorage.getItem('home_spot') || 'null');
-          const spotsOptions = allSpotsList.map(s =>
-            `<option value="${s.id}" data-lat="${s.lat}" data-lng="${s.lng}" ${savedHomeSpot?.id === s.id ? 'selected' : ''}>${s.name} — ${s.city}</option>`
-          ).join('');
 
           const identiteHtml = `
             <div class="card" style="text-align:center;padding-bottom:18px">
@@ -2223,10 +2232,10 @@ select option { background: #0d2137; color: #f0f4ff; }
               </div>
               <div class="form-group" style="margin-bottom:10px">
                 <label>📍 Spot de base (météo accueil)</label>
-                <select id="profile-home-spot">
-                  <option value="">— Choisir un spot —</option>
-                  ${spotsOptions}
-                </select>
+                <input type="text" id="profile-home-spot-search" placeholder="Rechercher un spot..."
+                       style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#f0f4ff;font-size:0.85rem;outline:none">
+                <input type="hidden" id="profile-home-spot">
+                <div id="profile-spot-results" style="max-height:150px;overflow-y:auto;display:none"></div>
               </div>
               <div class="datetime-row" style="margin-bottom:10px">
                 <div class="form-group" style="margin:0">
@@ -2305,6 +2314,34 @@ select option { background: #0d2137; color: #f0f4ff; }
             </div>`;
 
           container.innerHTML = identiteHtml + boardsHtml + configHtml;
+
+          // Wire up profile spot search
+          const profSpotSearch = document.getElementById('profile-home-spot-search');
+          const profSpotHidden = document.getElementById('profile-home-spot');
+          const profSpotResults = document.getElementById('profile-spot-results');
+          if (profSpotSearch && savedHomeSpot) {
+              profSpotSearch.value = savedHomeSpot.name || '';
+              profSpotHidden.value = savedHomeSpot.id || '';
+          }
+          if (profSpotSearch) {
+              let pst;
+              profSpotSearch.oninput = () => {
+                  clearTimeout(pst);
+                  const q = profSpotSearch.value.trim();
+                  profSpotHidden.value = '';
+                  if (q.length < 2) { profSpotResults.style.display = 'none'; return; }
+                  pst = setTimeout(async () => {
+                      const s = q.replace(/[.,()]/g, '');
+                      const { data } = await supabaseClient.from('spots').select('id, name, city, lat, lng').or(`name.ilike.%${s}%,city.ilike.%${s}%`).order('name').limit(15);
+                      profSpotResults.innerHTML = (data||[]).map(sp =>
+                          `<div onclick="document.getElementById('profile-home-spot').value='${sp.id}';document.getElementById('profile-home-spot-search').value='${(sp.name||'').replace(/'/g,"\\'")}';document.getElementById('profile-spot-results').style.display='none';document.getElementById('profile-home-spot').dataset.lat='${sp.lat}';document.getElementById('profile-home-spot').dataset.lng='${sp.lng}'"
+                           style="padding:8px;cursor:pointer;color:#f0f4ff;font-size:0.85rem">${sp.name} <span style="color:rgba(255,255,255,0.4)">${sp.city||''}</span></div>`
+                      ).join('') || '<div style="color:rgba(255,255,255,0.3);padding:8px">Aucun résultat</div>';
+                      profSpotResults.style.display = 'block';
+                  }, 300);
+              };
+              profSpotSearch.onfocus = () => { if (profSpotSearch.value.length >= 2) profSpotSearch.oninput(); };
+          }
         }
 
         function toggleConfig(btn) {
@@ -2562,32 +2599,63 @@ select option { background: #0d2137; color: #f0f4ff; }
           if (view === 'history') renderSessionHistory();
         }
 
+        let _sessionHistorySort = 'date'; // 'date', 'rating', 'spot'
+        let _sessionHistoryShowAll = false;
+
         function renderSessionHistory() {
           const container = document.getElementById('session-history-view');
           if (!container) return;
-          const sessions = userData.sessions || [];
+          let sessions = [...(userData.sessions || [])];
           if (!sessions.length) {
             container.innerHTML = '<div class="empty" style="padding-top:24px">Aucune session enregistrée.</div>';
             return;
           }
-          container.innerHTML = `
-            <div class="card">
-              <span class="section-label">📋 ${sessions.length} session${sessions.length > 1 ? 's' : ''}</span>
-              ${sessions.map(s => {
-                const date = new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
-                const spot = s.spots?.name || s.spot_id || '?';
-                const stars = '★'.repeat(Math.min(s.rating || 0, 5));
-                const wh = s.meteo?.waveHeight;
-                const meteo = wh != null ? ` · 🌊 ${Number(wh).toFixed(1)}m` : '';
-                return `<div class="session-compact">
-                  <div>
-                    <div style="font-size:0.82rem;color:#f0f4ff">${date} · ${spot}</div>
-                    <div style="font-size:0.72rem;color:rgba(255,255,255,0.45)">${meteo}</div>
-                  </div>
-                  <span style="color:#4dff91;font-size:0.78rem">${stars}</span>
-                </div>`;
-              }).join('')}
+
+          // Tri
+          if (_sessionHistorySort === 'rating') {
+            sessions.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+          } else if (_sessionHistorySort === 'spot') {
+            sessions.sort((a, b) => (a.spots?.name || '').localeCompare(b.spots?.name || ''));
+          }
+          // 'date' = déjà trié par défaut (du backend)
+
+          // Filtrer aux 3 derniers mois sauf si "voir tout"
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+          const filtered = _sessionHistoryShowAll ? sessions : sessions.filter(s => new Date(s.date) >= threeMonthsAgo);
+          const hasMore = !_sessionHistoryShowAll && filtered.length < sessions.length;
+
+          // Chips tri
+          const sortChips = `<div style="display:flex;gap:8px;margin-bottom:10px">
+            <div onclick="_sessionHistorySort='date';renderSessionHistory()" style="padding:6px 14px;border-radius:20px;font-size:0.8rem;cursor:pointer;border:1px solid ${_sessionHistorySort==='date'?'#4dff91':'rgba(255,255,255,0.15)'};background:${_sessionHistorySort==='date'?'rgba(77,255,145,0.15)':'rgba(255,255,255,0.06)'};color:${_sessionHistorySort==='date'?'#4dff91':'rgba(255,255,255,0.4)'}">Date</div>
+            <div onclick="_sessionHistorySort='rating';renderSessionHistory()" style="padding:6px 14px;border-radius:20px;font-size:0.8rem;cursor:pointer;border:1px solid ${_sessionHistorySort==='rating'?'#4dff91':'rgba(255,255,255,0.15)'};background:${_sessionHistorySort==='rating'?'rgba(77,255,145,0.15)':'rgba(255,255,255,0.06)'};color:${_sessionHistorySort==='rating'?'#4dff91':'rgba(255,255,255,0.4)'}">★ Note</div>
+            <div onclick="_sessionHistorySort='spot';renderSessionHistory()" style="padding:6px 14px;border-radius:20px;font-size:0.8rem;cursor:pointer;border:1px solid ${_sessionHistorySort==='spot'?'#4dff91':'rgba(255,255,255,0.15)'};background:${_sessionHistorySort==='spot'?'rgba(77,255,145,0.15)':'rgba(255,255,255,0.06)'};color:${_sessionHistorySort==='spot'?'#4dff91':'rgba(255,255,255,0.4)'}">Spot</div>
+          </div>`;
+
+          const rows = filtered.map(s => {
+            const date = new Date(s.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' });
+            const spot = s.spots?.name || '?';
+            const stars = '★'.repeat(Math.min(s.rating || 0, 5));
+            const wh = s.meteo?.waveHeight;
+            const meteo = wh != null ? ` · 🌊 ${Number(wh).toFixed(1)}m` : '';
+            return `<div class="session-compact">
+              <div>
+                <div style="font-size:0.82rem;color:#f0f4ff">${date} · ${spot}</div>
+                <div style="font-size:0.72rem;color:rgba(255,255,255,0.45)">${meteo}</div>
+              </div>
+              <span style="color:#4dff91;font-size:0.78rem">${stars}</span>
             </div>`;
+          }).join('');
+
+          const moreBtn = hasMore ? `<button onclick="_sessionHistoryShowAll=true;renderSessionHistory()" style="width:100%;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.8rem;margin-top:8px">Voir toutes les sessions (${sessions.length})</button>` : '';
+
+          container.innerHTML = `
+            ${sortChips}
+            <div class="card">
+              <span class="section-label">📋 ${filtered.length} session${filtered.length > 1 ? 's' : ''}${!_sessionHistoryShowAll ? ' (3 derniers mois)' : ''}</span>
+              ${rows}
+            </div>
+            ${moreBtn}`;
         }
 
         function showTab(tabName, btn) {
@@ -2683,14 +2751,14 @@ select option { background: #0d2137; color: #f0f4ff; }
             const waveMax = document.getElementById('profile-wave-max').value;
 
             // Spot de base pour la météo accueil
-            const homeSpotSelect = document.getElementById('profile-home-spot');
-            if (homeSpotSelect && homeSpotSelect.value) {
-                const opt = homeSpotSelect.options[homeSpotSelect.selectedIndex];
+            const homeSpotHidden = document.getElementById('profile-home-spot');
+            const homeSpotName = document.getElementById('profile-home-spot-search')?.value;
+            if (homeSpotHidden?.value) {
                 localStorage.setItem('home_spot', JSON.stringify({
-                    id:   homeSpotSelect.value,
-                    name: opt.text.split(' — ')[0],
-                    lat:  parseFloat(opt.dataset.lat),
-                    lng:  parseFloat(opt.dataset.lng)
+                    id:   homeSpotHidden.value,
+                    name: homeSpotName || '',
+                    lat:  parseFloat(homeSpotHidden.dataset.lat) || 0,
+                    lng:  parseFloat(homeSpotHidden.dataset.lng) || 0
                 }));
             }
 
