@@ -1231,7 +1231,7 @@ select option { background: #0d2137; color: #f0f4ff; }
                         <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">
                             Recevoir un lien de connexion
                         </button>
-                        <button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev</button>
+                        ${window.location.hostname === 'localhost' ? '<button class="auth-btn" style="margin-top:8px;background:rgba(255,255,255,0.1);color:#f0f4ff;font-size:0.8rem" onclick="devSignIn()">🔧 Connexion dev</button>' : ''}
                         <div class="auth-msg" id="auth-msg"></div>
                     </div>`;
                 document.body.appendChild(overlay);
@@ -4215,6 +4215,7 @@ select option { background: #0d2137; color: #f0f4ff; }
           const banner = document.getElementById('spot-pick-banner');
           if (banner) banner.style.display = (_spotPickMode && tabName === 'spots') ? 'flex' : 'none';
           if (tabName !== 'spots' && tabName !== 'session') { _spotPickMode = false; }
+          if (tabName === 'accueil') { loadSessions().then(() => loadAccueil()); }
           if (tabName === 'spots')   loadSpotsTab();
           if (tabName === 'session') loadSessionTab();
           if (tabName === 'profil')  loadProfilTab();
