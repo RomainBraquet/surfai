@@ -25,25 +25,34 @@ function computeWeights(sessionsWithMeteoCount) {
 }
 
 // ─── Facteur Vent (0-10) ────────────────────────────────
-function scoreWind(windSpeed, windDirection, idealWindDirections) {
-  // windSpeed en km/h, windDirection en degrés (0-360) ou string cardinal
+function scoreWind(windSpeed, windDirection, idealWindDirections, waveDirection) {
+  // windSpeed en km/h, windDirection en degrés (0-360)
   const speedKmh = windSpeed > 50 ? windSpeed / 3.6 : windSpeed; // si m/s → km/h
 
-  let speedScore;
-  if (speedKmh < 10)       speedScore = 10;
-  else if (speedKmh < 20)  speedScore = 8;
-  else if (speedKmh < 30)  speedScore = 5;
-  else if (speedKmh < 40)  speedScore = 2;
-  else                     speedScore = 0;
+  // Courbe continue gaussienne au lieu de paliers
+  // 0→10, 10→8.5, 15→7.0, 20→5.3, 25→3.7, 30→2.4, 40→0.8
+  const speedScore = 10 * Math.exp(-Math.pow(speedKmh / 25, 2));
 
-  // Bonus direction si les conditions idéales du spot sont connues
-  let directionBonus = 0;
-  if (windDirection !== null && windDirection !== undefined && idealWindDirections?.length > 0) {
-    const dir = degreesToCardinal(windDirection);
-    if (idealWindDirections.includes(dir)) directionBonus = 1.5;
+  // Scoring offshore : compare direction vent vs direction vagues
+  let offshoreBonus = 0;
+  if (windDirection != null && waveDirection != null) {
+    const diff = Math.abs(windDirection - waveDirection);
+    const normalized = diff > 180 ? 360 - diff : diff;
+    if (normalized > 150)      offshoreBonus = 2.0;   // offshore pur
+    else if (normalized > 120) offshoreBonus = 1.5;   // cross-offshore
+    else if (normalized > 60)  offshoreBonus = 0;     // cross-shore
+    else if (normalized > 30)  offshoreBonus = -1.0;  // cross-onshore
+    else                       offshoreBonus = -1.5;  // onshore pur
   }
 
-  return Math.min(10, speedScore + directionBonus);
+  // Bonus direction idéale du spot (si connue)
+  let spotDirBonus = 0;
+  if (windDirection != null && idealWindDirections?.length > 0) {
+    const dir = degreesToCardinal(windDirection);
+    if (idealWindDirections.includes(dir)) spotDirBonus = 0.5;
+  }
+
+  return Math.min(10, Math.max(0, speedScore + offshoreBonus + spotDirBonus));
 }
 
 // ─── Facteur Vagues + Houle (0-10) ──────────────────────
@@ -68,12 +77,10 @@ function scoreWaves(waveHeight, swellHeight, profile) {
 
 // ─── Facteur Période (0-10) ─────────────────────────────
 function scorePeriod(period) {
-  if (!period) return 3;
-  if (period >= 15) return 10;
-  if (period >= 12) return 8.5;
-  if (period >= 8)  return 6;
-  if (period >= 6)  return 3;
-  return 1;
+  if (!period) return 4; // neutre si inconnu (pas 3 — on ne pénalise pas l'absence)
+  // Courbe sigmoïde : transition douce entre 6-14s, plateau au-dessus
+  // 5s→2.4, 7s→3.6, 8s→4.4, 10s→6.0, 12s→7.6, 14s→8.8, 16s→9.5
+  return Math.min(10, 2 + 8 / (1 + Math.exp(-0.6 * (period - 10))));
 }
 
 // ─── Facteur Historique (0-10) ──────────────────────────
@@ -120,14 +127,36 @@ function scoreSpot(slot, spot) {
 }
 
 // ─── Bonus Marée ────────────────────────────────────────
-function tideBonus(tidePhase, idealTide) {
-  if (!tidePhase || tidePhase === 'unknown' || !idealTide?.length) return 0;
-  // Mapper phase courante vers catégorie low/mid/high
+// Impact réel sur le Pays Basque : la marée peut rendre un spot dangereux ou parfait
+function tideBonus(tidePhase, idealTide, spot) {
+  if (!tidePhase || tidePhase === 'unknown') return 0;
+
+  // Spot sans info marée → privilégier mi-marée par défaut
+  if (!idealTide?.length) {
+    if (tidePhase === 'rising' || tidePhase === 'falling') return 0.8;  // mi-marée = bon par défaut
+    if (tidePhase === 'low') return 0;     // neutre
+    if (tidePhase === 'high') return -0.5; // léger malus marée haute
+    return 0;
+  }
+
+  // Mapper phase courante vers catégories
   const phaseMap = { low: 'low', high: 'high', rising: 'mid', falling: 'mid' };
   const category = phaseMap[tidePhase];
-  if (idealTide.includes(category)) return 0.5;
-  if (idealTide.includes('mid') && (tidePhase === 'rising' || tidePhase === 'falling')) return 0.3;
-  return -0.3;
+
+  // Marée idéale → gros bonus
+  if (idealTide.includes(category)) return 1.5;
+
+  // Marée acceptable (mi-marée quand le spot veut mid)
+  if (idealTide.includes('mid') && (tidePhase === 'rising' || tidePhase === 'falling')) return 0.8;
+
+  // Marée opposée à l'idéale → pénalité forte
+  // Ex: spot qui veut "low" et on est à "high" → dangereux ou pas surfable
+  const isOpposite = (idealTide.includes('low') && tidePhase === 'high') ||
+                     (idealTide.includes('high') && tidePhase === 'low');
+  if (isOpposite) return -1.5;
+
+  // Marée pas idéale mais pas opposée
+  return -0.5;
 }
 
 // ─── Board Suggestion ───────────────────────────────────
@@ -170,18 +199,83 @@ function degreesToCardinal(deg) {
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
+// ─── Explications lisibles ────────────────────────────────
+function buildWhyGood(slot, windScore, wavesScore, periodScore, tideAdj, spotScore, profile, spot, similarSession) {
+  const reasons = [];   // pourquoi c'est bien
+  const caveats = [];   // points d'attention
+
+  // --- Vent ---
+  const speedKmh = (slot.windSpeed || 0) > 50 ? (slot.windSpeed || 0) / 3.6 : (slot.windSpeed || 0);
+  if (windScore >= 9) {
+    reasons.push('Conditions glassy — quasi pas de vent');
+  } else if (windScore >= 7) {
+    // Vérifier si c'est grâce à l'offshore
+    if (slot.windDirection != null && slot.waveDirection != null) {
+      const diff = Math.abs(slot.windDirection - slot.waveDirection);
+      const norm = diff > 180 ? 360 - diff : diff;
+      if (norm > 120) reasons.push('Vent offshore — vagues propres et creuses');
+      else reasons.push('Vent modéré et bien orienté');
+    } else {
+      reasons.push('Vent faible (' + Math.round(speedKmh) + ' km/h)');
+    }
+  } else if (windScore < 4) {
+    if (speedKmh > 30) caveats.push('Vent fort (' + Math.round(speedKmh) + ' km/h) — conditions difficiles');
+    else caveats.push('Vent onshore — vagues hachées');
+  }
+
+  // --- Vagues ---
+  const waveH = Math.max(slot.waveHeight || 0, slot.swellHeight || 0);
+  if (wavesScore >= 8) {
+    reasons.push('Vagues parfaites pour toi (' + waveH.toFixed(1) + 'm)');
+  } else if (wavesScore >= 6) {
+    reasons.push('Taille de vagues dans ta zone (' + waveH.toFixed(1) + 'm)');
+  } else if (wavesScore < 4) {
+    if (waveH < (profile.min_wave_height || 0.8)) {
+      caveats.push('Vagues petites (' + waveH.toFixed(1) + 'm) — en dessous de tes préférences');
+    } else {
+      caveats.push('Vagues grosses (' + waveH.toFixed(1) + 'm) — au-dessus de tes préférences');
+    }
+  }
+
+  // --- Période ---
+  const period = slot.wavePeriod || 0;
+  if (period >= 12) {
+    reasons.push('Période longue (' + Math.round(period) + 's) — vagues puissantes et espacées');
+  } else if (period > 0 && period < 7) {
+    caveats.push('Période courte (' + Math.round(period) + 's) — vagues désorganisées');
+  }
+
+  // --- Marée ---
+  if (tideAdj >= 1.0) {
+    const tideLabel = { low: 'basse', high: 'haute', rising: 'montante', falling: 'descendante' };
+    reasons.push('Marée ' + (tideLabel[slot.tidePhase] || slot.tidePhase) + ' — idéale pour ce spot');
+  } else if (tideAdj <= -1.0) {
+    const tideLabel = { low: 'basse', high: 'haute', rising: 'montante', falling: 'descendante' };
+    caveats.push('Marée ' + (tideLabel[slot.tidePhase] || slot.tidePhase) + ' — pas idéale pour ce spot');
+  }
+
+  // --- Session similaire ---
+  if (similarSession) {
+    const date = new Date(similarSession.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    const stars = '★'.repeat(similarSession.rating || 0);
+    reasons.push('Conditions similaires à ta session du ' + date + ' (' + stars + ')');
+  }
+
+  return { whyGood: reasons, whyNotPerfect: caveats };
+}
+
 // ─── Fonction principale ─────────────────────────────────
 function scoreSlot(slot, context) {
   const { profile, spot, pastSessions = [], boards = [] } = context;
   const sessionsWithMeteo = pastSessions.filter(s => s.meteo).length;
   const weights = computeWeights(sessionsWithMeteo);
 
-  const windScore    = scoreWind(slot.windSpeed, slot.windDirection, spot.ideal_wind);
+  const windScore    = scoreWind(slot.windSpeed, slot.windDirection, spot.ideal_wind, slot.waveDirection);
   const wavesScore   = scoreWaves(slot.waveHeight, slot.swellHeight, profile);
   const periodScore  = scorePeriod(slot.wavePeriod);
   const historyScore = scoreHistory(slot, pastSessions);
   const spotScore    = scoreSpot(slot, spot);
-  const tideAdj      = tideBonus(slot.tidePhase, spot.ideal_tide);
+  const tideAdj      = tideBonus(slot.tidePhase, spot.ideal_tide, spot);
 
   const rawScore =
     windScore    * weights.wind   +
@@ -206,6 +300,8 @@ function scoreSlot(slot, context) {
     })[0];
   }
 
+  const why = buildWhyGood(slot, windScore, wavesScore, periodScore, tideAdj, spotScore, profile, spot, similarSession);
+
   return {
     score,
     factors: {
@@ -214,11 +310,14 @@ function scoreSlot(slot, context) {
       period:  { score: Math.round(periodScore * 10) / 10,  weight: weights.period },
       history: { score: Math.round(historyScore * 10) / 10, weight: weights.history, basedOnSessions: sessionsWithMeteo },
       spot:    { score: Math.round(spotScore * 10) / 10,     weight: weights.spot },
+      tide:    { bonus: tideAdj },
     },
+    whyGood: why.whyGood,
+    whyNotPerfect: why.whyNotPerfect,
     boardSuggestion,
     similarSession,
     calibrationLevel: Math.round(weights.history * 100) / 100,
   };
 }
 
-module.exports = { scoreSlot, computeWeights, degreesToCardinal };
+module.exports = { scoreSlot, computeWeights, degreesToCardinal, buildWhyGood };
