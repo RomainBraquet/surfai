@@ -396,8 +396,8 @@ router.get('/predictions/best-windows', async (req, res) => {
       return res.json({ success: true, message: 'Aucun spot favori trouvé', results: [] });
     }
 
-    // Limiter à 3 spots pour préserver le quota Stormglass
-    const spotsToAnalyze = favoriteSpots.slice(0, 3);
+    // Analyser tous les spots favoris (Stormglass payant = pas de limite)
+    const spotsToAnalyze = favoriteSpots;
     const results = await Promise.all(
       spotsToAnalyze.map(spot =>
         collectContext(spot.id, userId, days)

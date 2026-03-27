@@ -33,11 +33,13 @@ function buildTimeWindow(slots) {
   const best = slots.reduce((a, b) => a.score > b.score ? a : b);
   const peakHour = new Date(best.time).getHours();
 
-  // Étendre la fenêtre aux heures adjacentes de score >= (peak - 1.5)
+  // Fenêtre de 3h max centrée sur le peak
+  // Prendre les heures adjacentes au peak avec score >= (peak - 1.5), limitées à 3h
   const threshold = best.score - 1.5;
   const windowHours = slots
     .filter(s => s.score >= threshold)
     .map(s => new Date(s.time).getHours())
+    .filter(h => Math.abs(h - peakHour) <= 1) // max 1h avant et 1h après le peak = 3h
     .sort((a, b) => a - b);
 
   if (windowHours.length === 0) return { timeWindow: `${peakHour}h`, peakHour };
@@ -108,7 +110,7 @@ function getBestWindows(context, maxWindows = 10) {
     .slice(0, maxWindows);
 
   return {
-    spot: { id: spot.id, name: spot.name, city: spot.city },
+    spot: { id: spot.id, name: spot.name, city: spot.city, lat: spot.lat, lng: spot.lng },
     generatedAt: new Date().toISOString(),
     windows,
     calibrationLevel: scored[0]?.calibrationLevel || 0.10,

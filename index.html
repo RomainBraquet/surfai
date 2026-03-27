@@ -635,7 +635,7 @@ select option { background: #0d2137; color: #f0f4ff; }
   <!-- Navigation bas -->
   <nav class="bottom-nav">
     <button class="nav-tab active" onclick="showTab('accueil', this)">
-      <span class="nav-icon">🏄‍♂️</span><span class="nav-label">Accueil</span>
+      <span class="nav-icon">🎯</span><span class="nav-label">Prédictions</span>
     </button>
     <button class="nav-tab" onclick="showTab('spots', this)">
       <span class="nav-icon">📍</span><span class="nav-label">Spots</span>
@@ -1633,34 +1633,51 @@ select option { background: #0d2137; color: #f0f4ff; }
               return;
             }
 
-            const allWindows = [];
-            data.results.forEach(spotResult => {
-              (spotResult.windows || []).forEach(w => {
-                allWindows.push({ ...w, spotName: spotResult.spot?.name || '' });
-              });
-            });
-            allWindows.sort((a, b) => b.score - a.score);
-            const top3 = allWindows.slice(0, 3);
+            // Organiser par spot : le meilleur créneau de chaque spot favori
+            // Trier par score MAIS pénaliser les spots lointains
+            const userLat = _userLat || JSON.parse(localStorage.getItem('home_spot') || '{}').lat || 43.48;
+            const userLng = _userLng || JSON.parse(localStorage.getItem('home_spot') || '{}').lng || -1.56;
 
-            if (!top3.length) {
+            const spotCards = data.results
+              .filter(r => r.windows?.length > 0)
+              .map(r => {
+                const spotLat = r.spot?.lat || 0;
+                const spotLng = r.spot?.lng || 0;
+                const distKm = spotLat ? haversineKm(spotLat, spotLng, userLat, userLng) : 0;
+                // Score ajusté : pénalité de 0.1 point par 10km de distance
+                const adjustedScore = r.windows[0].score - (distKm / 100);
+                return { spot: r.spot, best: r.windows[0], distKm, adjustedScore };
+              })
+              .sort((a, b) => b.adjustedScore - a.adjustedScore);
+
+            if (!spotCards.length) {
               container.innerHTML = '<div class="empty">Aucun créneau favorable sur 3 jours.</div>';
               return;
             }
 
-            // 1er créneau = bloc principal, 2 suivants = côte à côte
-            function renderWindow(w, isBig) {
+            function dirToCardinal(d) {
+              if (typeof d !== 'number') return d || '';
+              return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d / 22.5) % 16];
+            }
+
+            const html = spotCards.map((item, i) => {
+              const w = item.best;
+              const spotName = item.spot?.name || '';
               const scoreColor = w.score >= 8 ? '#4dff91' : w.score >= 6 ? '#00cfff' : '#ed8936';
               const date = new Date(w.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-              if (isBig) {
+              const windDir = dirToCardinal(w.conditions?.windDirection);
+              const isFirst = i === 0;
+
+              if (isFirst) {
+                // Premier spot = card détaillée avec whyGood
                 const whyHtml = (w.whyGood || []).map(r => `<div style="color:#4dff91;font-size:0.75rem;margin-top:3px">✅ ${r}</div>`).join('')
                   + (w.whyNotPerfect || []).map(r => `<div style="color:#ed8936;font-size:0.75rem;margin-top:3px">⚠️ ${r}</div>`).join('');
                 const boardHtml = w.boardSuggestion?.board ? `<div style="color:#00cfff;font-size:0.75rem;margin-top:6px;padding:6px 10px;background:rgba(0,207,255,0.08);border:1px solid rgba(0,207,255,0.15);border-radius:6px">🏄 Prends ta <strong>${w.boardSuggestion.board.nickname || w.boardSuggestion.board.name}</strong> — ${w.boardSuggestion.reason || ''}</div>` : '';
-                const windDir = typeof w.conditions?.windDirection === 'number' ? ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(w.conditions.windDirection / 22.5) % 16] : (w.conditions?.windDirection || '');
                 return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:10px">
                   <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
                     <div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;flex-shrink:0">${w.score}</div>
                     <div>
-                      <div style="color:#f0f4ff;font-size:1rem;font-weight:600">${w.spotName}</div>
+                      <div style="color:#f0f4ff;font-size:1rem;font-weight:600">${spotName}</div>
                       <div style="color:rgba(255,255,255,0.5);font-size:0.85rem">${date} · ${w.timeWindow || ''}</div>
                     </div>
                   </div>
@@ -1670,25 +1687,24 @@ select option { background: #0d2137; color: #f0f4ff; }
                   ${boardHtml}
                 </div>`;
               }
-              return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;flex:1;min-width:0">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-                  <div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;flex-shrink:0">${w.score}</div>
-                  <div style="min-width:0">
-                    <div style="color:#f0f4ff;font-size:0.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.spotName}</div>
-                    <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">${date} · ${w.timeWindow || ''}</div>
+
+              // Autres spots = cards compactes mais informatives
+              return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="background:${scoreColor};color:#0a0e27;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;flex-shrink:0">${w.score}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="color:#f0f4ff;font-size:0.88rem;font-weight:600">${spotName}</div>
+                    <div style="color:rgba(255,255,255,0.45);font-size:0.75rem">${date} · ${w.timeWindow || ''}</div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.75rem">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m</div>
+                    <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h ${windDir}</div>
                   </div>
                 </div>
-                <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">🌊 ${(w.conditions?.waveHeight || 0).toFixed(1)}m · 💨 ${Math.round(w.conditions?.windSpeed || 0)}km/h</div>
+                ${w.whyGood?.length ? `<div style="color:#4dff91;font-size:0.7rem;margin-top:4px">${w.whyGood[0]}</div>` : ''}
               </div>`;
-            }
+            }).join('');
 
-            let html = renderWindow(top3[0], true);
-            if (top3.length > 1) {
-              html += '<div style="display:flex;gap:8px">';
-              if (top3[1]) html += renderWindow(top3[1], false);
-              if (top3[2]) html += renderWindow(top3[2], false);
-              html += '</div>';
-            }
             container.innerHTML = html;
 
           } catch (e) {
