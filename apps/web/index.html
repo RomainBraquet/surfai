@@ -1467,7 +1467,9 @@ select option { background: #0d2137; color: #f0f4ff; }
             const { error } = await supabaseClient.auth.signUp({ email, password });
             setOnbBtnLoading(false);
             if (error) { showOnbMsg(error.message, 'error'); return; }
-            // signUp with email/password auto-signs in via onAuthStateChange
+            showOnbMsg('📧 Verifie ta boite mail pour confirmer ton compte !', 'success');
+            // Don't auto-redirect, user needs to confirm email first
+            return;
         }
 
         async function signInEmail() {
@@ -3362,11 +3364,6 @@ select option { background: #0d2137; color: #f0f4ff; }
                 </div>
               </div>
               <button class="btn-primary" onclick="saveProfile()">Sauvegarder</button>
-              <button onclick="signOut()" style="width:100%;margin-top:12px;padding:10px;
-                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
-                border-radius:8px;color:rgba(255,255,255,0.5);cursor:pointer;font-size:0.85rem">
-                Se déconnecter
-              </button>
             </div>`;
 
           const boardsDropdownHtml = boards.length
@@ -3420,7 +3417,67 @@ select option { background: #0d2137; color: #f0f4ff; }
               </div>
             </div>`;
 
-          container.innerHTML = identiteHtml + boardsHtml + configHtml;
+          // Detect OAuth provider
+          const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
+          const authProvider = currentSession?.user?.app_metadata?.provider || 'email';
+          const isOAuth = authProvider === 'google' || authProvider === 'apple';
+          const userEmail = currentSession?.user?.email || '';
+          const emailPredictions = profile.email_predictions || false;
+
+          const notificationsHtml = `
+            <div class="card" style="margin-top:12px">
+              <span class="section-label">Notifications</span>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
+                <div style="flex:1">
+                  <div style="color:#f0f4ff;font-size:0.85rem;font-weight:500">Predictions par email</div>
+                  <div style="color:rgba(255,255,255,0.4);font-size:0.72rem;margin-top:2px">Dimanche + jeudi</div>
+                </div>
+                <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+                  <input type="checkbox" id="toggle-email-predictions" ${emailPredictions ? 'checked' : ''} onchange="toggleEmailPredictions(this.checked)" style="opacity:0;width:0;height:0">
+                  <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:${emailPredictions ? '#4dff91' : 'rgba(255,255,255,0.15)'};border-radius:12px;transition:0.3s"></span>
+                  <span style="position:absolute;top:2px;left:${emailPredictions ? '22px' : '2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:0.3s"></span>
+                </label>
+              </div>
+            </div>`;
+
+          const compteHtml = `
+            <div class="card" style="margin-top:12px">
+              <span class="section-label">Compte</span>
+              <div class="form-group" style="margin-bottom:10px">
+                <label>Email</label>
+                <input type="text" value="${userEmail}" disabled style="opacity:0.6;cursor:not-allowed">
+              </div>
+              ${!isOAuth ? `
+              <button onclick="togglePasswordForm()" style="width:100%;padding:10px;
+                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
+                border-radius:8px;color:#00cfff;cursor:pointer;font-size:0.85rem;margin-bottom:8px">
+                Changer le mot de passe
+              </button>
+              <div id="password-change-form" style="display:none;margin-bottom:10px">
+                <div class="form-group" style="margin-bottom:8px">
+                  <label>Nouveau mot de passe</label>
+                  <input type="password" id="new-password" placeholder="Min 6 caracteres">
+                </div>
+                <div class="form-group" style="margin-bottom:8px">
+                  <label>Confirmer</label>
+                  <input type="password" id="confirm-password" placeholder="Confirmer le mot de passe">
+                </div>
+                <div id="password-feedback"></div>
+                <button class="btn-primary" onclick="changePassword()" style="width:100%">Sauvegarder</button>
+              </div>
+              ` : `
+              <div style="color:rgba(255,255,255,0.4);font-size:0.78rem;padding:4px 0;margin-bottom:8px">
+                Connecte via ${authProvider === 'google' ? 'Google' : 'Apple'} — mot de passe non modifiable
+              </div>
+              `}
+              <button onclick="signOut()" style="width:100%;margin-top:4px;padding:10px;
+                background:rgba(255,70,70,0.1);border:1px solid rgba(255,70,70,0.25);
+                border-radius:8px;color:rgba(255,70,70,0.7);cursor:pointer;font-size:0.85rem">
+                Se deconnecter
+              </button>
+            </div>`;
+
+          container.innerHTML = identiteHtml + boardsHtml + notificationsHtml + compteHtml + configHtml;
 
           // Set saved home spot value
           if (savedHomeSpot?.id) {
@@ -4930,6 +4987,62 @@ select option { background: #0d2137; color: #f0f4ff; }
 
             // Recharger la home pour appliquer le nouveau spot de base
             loadAccueil();
+        }
+
+        function togglePasswordForm() {
+            const form = document.getElementById('password-change-form');
+            if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function changePassword() {
+            const newPw = document.getElementById('new-password').value;
+            const confirmPw = document.getElementById('confirm-password').value;
+            if (!newPw || newPw.length < 6) {
+                showMessage('error', 'Le mot de passe doit faire au moins 6 caracteres', 'password-feedback');
+                return;
+            }
+            if (newPw !== confirmPw) {
+                showMessage('error', 'Les mots de passe ne correspondent pas', 'password-feedback');
+                return;
+            }
+            try {
+                const { error } = await supabaseClient.auth.updateUser({ password: newPw });
+                if (error) throw error;
+                showMessage('success', 'Mot de passe mis a jour !', 'password-feedback');
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+                setTimeout(() => {
+                    const form = document.getElementById('password-change-form');
+                    if (form) form.style.display = 'none';
+                }, 2000);
+            } catch (err) {
+                showMessage('error', err.message, 'password-feedback');
+            }
+        }
+
+        async function toggleEmailPredictions(enabled) {
+            try {
+                const userId = dataManager.currentUserId;
+                if (!userId) return;
+                // Save to profile via Supabase
+                await supabaseClient.from('profiles').upsert({
+                    id: userId,
+                    email_predictions: enabled,
+                    updated_at: new Date().toISOString()
+                });
+                userData.profile.email_predictions = enabled;
+                localStorage.setItem('surfai_profile', JSON.stringify(userData.profile));
+                // Update toggle visual state
+                const toggle = document.getElementById('toggle-email-predictions');
+                if (toggle) {
+                    const track = toggle.nextElementSibling;
+                    const knob = track.nextElementSibling;
+                    if (track) track.style.background = enabled ? '#4dff91' : 'rgba(255,255,255,0.15)';
+                    if (knob) knob.style.left = enabled ? '22px' : '2px';
+                }
+            } catch (err) {
+                console.error('Erreur toggle email predictions:', err);
+            }
         }
 
         function showMessage(type, message, containerId) {

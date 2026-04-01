@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/v1/notifications/send-predictions",
+      "schedule": "0 7 * * 0,4"
+    }
+  ]
+}

@@ -530,4 +530,141 @@ router.get('/weather/current', async (req, res) => {
   }
 });
 
+// ─── NOTIFICATIONS / EMAIL PREDICTIONS ──────────────────
+
+// POST/GET /api/v1/notifications/send-predictions
+// Protected by x-cron-secret header or Vercel cron Authorization header
+async function handleSendPredictions(req, res) {
+  try {
+    // Auth: verify cron secret (x-cron-secret header or Vercel Authorization Bearer)
+    const cronSecret = req.headers['x-cron-secret']
+      || (req.headers['authorization'] || '').replace('Bearer ', '');
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const db = require('../services/supabaseService');
+    const { collectContext } = require('../services/collector');
+    const { getBestWindows } = require('../services/recommender');
+
+    // Get all profiles with email predictions enabled
+    const profiles = await db.getProfilesWithEmailPredictions();
+    if (!profiles.length) {
+      return res.json({ success: true, message: 'Aucun utilisateur avec notifications actives', sent: 0 });
+    }
+
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    if (!RESEND_API_KEY) {
+      return res.status(500).json({ success: false, error: 'RESEND_API_KEY manquante' });
+    }
+
+    let sent = 0;
+    let errors = [];
+
+    for (const profile of profiles) {
+      try {
+        // Get user email from Supabase auth
+        const { data: { user } } = await db.supabase.auth.admin.getUserById(profile.id);
+        if (!user?.email) continue;
+
+        // Get favorite spots
+        const favoriteSpots = await db.getFavoriteSpots(profile.id);
+        if (!favoriteSpots.length) continue;
+
+        // Collect predictions for each spot (3 days)
+        const spotResults = [];
+        for (const spot of favoriteSpots.slice(0, 3)) {
+          try {
+            const ctx = await collectContext(spot.id, profile.id, 3);
+            const result = getBestWindows(ctx, 4);
+            spotResults.push({ spot, windows: result.windows || [] });
+          } catch (e) {
+            spotResults.push({ spot, windows: [], error: e.message });
+          }
+        }
+
+        // Build HTML email
+        const nickname = profile.nickname || profile.pseudo || 'Surfeur';
+        const spotsHtml = spotResults.map(sr => {
+          const windowsHtml = sr.windows.length
+            ? sr.windows.map(w => {
+              const date = new Date(w.start * 1000);
+              const dayStr = date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+              const hourStr = date.getHours() + 'h';
+              const score = w.score ? Math.round(w.score * 100) : '?';
+              return `<tr>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee">${dayStr} ${hourStr}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee">${w.waveHeight ? w.waveHeight.toFixed(1) + 'm' : '-'}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee">${score}%</td>
+              </tr>`;
+            }).join('')
+            : '<tr><td colspan="3" style="padding:10px;color:#999">Pas de creneau ideal prevu</td></tr>';
+
+          return `
+            <div style="margin-bottom:20px">
+              <h3 style="color:#0d2137;margin:0 0 8px">${sr.spot.name || 'Spot'} ${sr.spot.city ? '(' + sr.spot.city + ')' : ''}</h3>
+              <table style="width:100%;border-collapse:collapse;font-size:14px">
+                <thead><tr style="background:#f0f4ff">
+                  <th style="padding:6px 10px;text-align:left">Creneau</th>
+                  <th style="padding:6px 10px;text-align:left">Vagues</th>
+                  <th style="padding:6px 10px;text-align:left">Score</th>
+                </tr></thead>
+                <tbody>${windowsHtml}</tbody>
+              </table>
+            </div>`;
+        }).join('');
+
+        const emailHtml = `
+          <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px">
+            <div style="text-align:center;margin-bottom:24px">
+              <h1 style="color:#0d2137;font-size:22px;margin:0">SurfAI - Tes previsions surf</h1>
+              <p style="color:#666;font-size:14px;margin:4px 0 0">Salut ${nickname} ! Voici tes meilleurs creneaux.</p>
+            </div>
+            ${spotsHtml}
+            <div style="text-align:center;margin-top:24px;padding:16px;background:#f0f4ff;border-radius:8px">
+              <p style="color:#666;font-size:12px;margin:0">Tu peux desactiver ces emails dans ton profil SurfAI.</p>
+            </div>
+          </div>`;
+
+        // Send via Resend API
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${RESEND_API_KEY}`
+          },
+          body: JSON.stringify({
+            from: 'SurfAI <notifications@surfai.app>',
+            to: user.email,
+            subject: `SurfAI - Tes previsions surf`,
+            html: emailHtml
+          })
+        });
+
+        if (resendResponse.ok) {
+          sent++;
+        } else {
+          const errBody = await resendResponse.text();
+          errors.push({ userId: profile.id, error: errBody });
+        }
+      } catch (userError) {
+        errors.push({ userId: profile.id, error: userError.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Predictions envoyees`,
+      sent,
+      total: profiles.length,
+      errors: errors.length ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Erreur send-predictions:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
+router.post('/notifications/send-predictions', handleSendPredictions);
+router.get('/notifications/send-predictions', handleSendPredictions);
+
 module.exports = router;

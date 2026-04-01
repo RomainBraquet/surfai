@@ -198,6 +198,27 @@ async function deleteSession(sessionId, userId) {
   return true;
 }
 
+// ─── EMAIL PREDICTIONS ──────────────────────────────────
+
+async function getProfilesWithEmailPredictions() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('email_predictions', true);
+  if (error) throw new Error(`Erreur profiles email_predictions: ${error.message}`);
+  return data || [];
+}
+
+async function updateProfileEmail(userId, email) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId, email, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw new Error(`Erreur updateProfileEmail: ${error.message}`);
+  return data;
+}
+
 module.exports = {
   supabase,
   getSpots,
@@ -216,4 +237,6 @@ module.exports = {
   getTideCache,
   setTideCache,
   getFavoriteSpots,
+  getProfilesWithEmailPredictions,
+  updateProfileEmail,
 };
