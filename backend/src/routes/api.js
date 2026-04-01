@@ -634,7 +634,7 @@ async function handleSendPredictions(req, res) {
             'Authorization': `Bearer ${RESEND_API_KEY}`
           },
           body: JSON.stringify({
-            from: 'SurfAI <notifications@surfai.app>',
+            from: process.env.RESEND_FROM || 'SurfAI <onboarding@resend.dev>',
             to: user.email,
             subject: `SurfAI - Tes previsions surf`,
             html: emailHtml
